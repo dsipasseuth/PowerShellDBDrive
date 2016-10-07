@@ -70,7 +70,7 @@ namespace PowerShellDBDrive.Provider
 			}
 			var driveParams = this.DynamicParameters as DatabaseParameters;
 			var driveInfo = new DatabaseDriveInfo(drive, driveParams);
-			var connection = new OleDbConnection(driveInfo.Root);
+			var connection = new OleDbConnection(driveParams.ConnectionString);
 			connection.Open();
 			driveInfo.DatabaseConnection = connection;
             return driveInfo;
@@ -110,6 +110,41 @@ namespace PowerShellDBDrive.Provider
         }
 		
 		#endregion Drive Manipulation
+		
+		
+		#region Item Methods
+		
+		/// <summary> 
+		/// Checks to see if a given path is actually a drive name. 
+		/// </summary> 
+		/// <param name="path">The path to investigate.</param> 
+		/// <returns> 
+		/// True if the path represents a drive; otherwise false is returned. 
+		/// </returns> 
+		private bool PathIsDrive(string path) 
+		{ 
+			// Remove the drive name and first path separator.  If the  
+			// path is reduced to nothing, it is a drive. Also if it is 
+			// just a drive then there will not be any path separators. 
+			if (String.IsNullOrEmpty(path.Replace(this.PSDriveInfo.Root, string.Empty)) || 
+				String.IsNullOrEmpty(path.Replace(this.PSDriveInfo.Root + this.pathSeparator, string.Empty))) 
+			{ 
+				return true; 
+			} 
+			else 
+			{ 
+				return false; 
+			} 
+		}
+		
+	    /// <summary> 
+		/// The Windows PowerShell engine calls this method when the Get-Item  
+		/// cmdlet is run. 
+		/// </summary> 
+		/// <param name="path">The path to the item to return.</param> 
+		protected override void GetItem(string path) {
+			
+		}
 		
 	    /// <summary> 
 		/// Test to see if the specified path is syntactically valid. 

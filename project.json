@@ -1,18 +1,16 @@
 {
-  "version": "1.0.0-*",
-  "buildOptions": {
-    "debugType": "portable",
-    "emitEntryPoint": true
-  },
-  "dependencies": {
-	  "Microsoft.PowerShell.4.ReferenceAssemblies": "1.0.0-*"
-  },
-  "frameworks": {
-    "net462": {
-		"dependencies": {
-			"System.Collections": "4.0.10-*",
-			"System.Linq": "4.0.0-*"
-		}
+	"name" : "PowerShellDBDrive",
+	"version": "1.0.0-*",
+	"description" : "Provides database providers for PSDrive in PowerShell",
+	"buildOptions": {
+		"debugType": "portable"
+	},
+	"dependencies": {
+		"NETStandard.Library" : "1.6.0",
+		"System.Data.Common" : "4.1-*",
+		"Microsoft.PowerShell.4.ReferenceAssemblies": "1.0.0-*"
+	},
+	"frameworks": {
+		"net462" : { }
 	}
-  }
 }

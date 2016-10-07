@@ -8,5 +8,8 @@ namespace PowerShellDBDrive
         public DatabaseParameters()
         {
 		}
+		
+		[Parameter(Mandatory=true)]
+		public string ConnectionString {get; set;}
 	}
 }
