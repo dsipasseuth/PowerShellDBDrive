@@ -5,6 +5,7 @@ using System.Management.Automation;
 using System.Management.Automation.Provider;
 using PowerShellDBDrive;
 using System.Data.OleDb;
+using System.Data;
 
 namespace PowerShellDBDrive.Provider
 {
@@ -35,11 +36,7 @@ namespace PowerShellDBDrive.Provider
 			}
 			
 			if (String.IsNullOrEmpty(drive.Root)) {
-				WriteError(new ErrorRecord(
-									   new ArgumentNullException("drive.Root"),
-									   "NullRoot",
-									   ErrorCategory.InvalidArgument,
-									   null));
+				WriteError(new ErrorRecord(new ArgumentNullException("drive.Root"),"NullRoot",ErrorCategory.InvalidArgument,null));
 				return null;
 			}
 			var driveParams = this.DynamicParameters as DatabaseParameters;
@@ -59,21 +56,14 @@ namespace PowerShellDBDrive.Provider
 		protected override PSDriveInfo RemoveDrive(PSDriveInfo drive) { 
 			// Check to see if the supplied drive object is null. 
 			if (drive == null) { 
-				WriteError(new ErrorRecord( 
-										new ArgumentNullException("drive"), 
-										"NullDrive", 
-										ErrorCategory.InvalidArgument, 
-										drive));
+				WriteError(new ErrorRecord(new ArgumentNullException("drive"), "NullDrive", ErrorCategory.InvalidArgument, drive));
 				return null; 
 			}
-			
 			var driveInfo = drive as DatabaseDriveInfo;
 			if (driveInfo == null) {
 				return null;
 			}
-			
 			driveInfo.DatabaseConnection.Close();
-			
 			return driveInfo;
 		}
 		
@@ -320,12 +310,11 @@ namespace PowerShellDBDrive.Provider
 		/// information about one database table
 		/// </returns> 
 		private IEnumerable<DatabaseTableInfo> GetTables() 
-		{ 
-			ICollection<DatabaseTableInfo> results = new List<DatabaseTableInfo>();
+		{
 			// Using the OleDb connection to the database get the schema of tables. 
 			DatabaseDriveInfo di = this.PSDriveInfo as DatabaseDriveInfo;
 			if (di == null) {
-				return null; 
+				yield break;
 			}
 			OleDbConnection connection = di.DatabaseConnection;
 			DataTable dt = connection.GetSchema("Tables");
@@ -343,22 +332,19 @@ namespace PowerShellDBDrive.Provider
 					OleDbCommand command = new OleDbCommand(cmd, connection);
 					count = (int)command.ExecuteScalar(); 
 				} catch {
-					count = 0; 
+					count = 0;
 				}
 				// Create the DatabaseTableInfo object representing the table. 
-				DatabaseTableInfo table = new DatabaseTableInfo(dr, tableName, count, columns); 
-				results.Add(table); 
+				yield return new DatabaseTableInfo(dr, tableName, count, columns);
 			}
-			return results; 
 		}
 		
 		/// <summary> 
 		/// Return all schemas information. 
 		/// </summary> 
 		/// <returns>Collection of schema information objects.</returns> 
-		private IEnumerable<DatabaseSchemaInfo> GetSchemas() 
-		{ 
-			return new List<DatabaseSchemaInfo>() { schemaName };
+		private IEnumerable<DatabaseSchemaInfo> GetSchemas() { 
+			return new List<DatabaseSchemaInfo>();
 		}
 		
 		/// <summary> 
@@ -367,23 +353,29 @@ namespace PowerShellDBDrive.Provider
 		/// <param name="tableName">The name of the database table from  
 		/// which to retrieve rows.</param> 
 		/// <returns>Collection of row information objects.</returns> 
-		private IEnumerable<DatabaseRowInfo> GetRows(string tableName) {
-			ICollection<DatabaseRowInfo> results = new List<DatabaseRowInfo>();
+		private IEnumerable<DatabaseRowInfo> GetRows(string tableName, int maxResult) {
 			// Obtain the rows in the table and add them to the collection. 
 			try {
-				OleDataAdapter da = GetAdapterForTable(tableName);
-				if (da == null) { 
-				  return null; 
-				}
-				DataSet ds = GetDataSetForTable(da, tableName); 
-				DataTable table = GetDataTable(ds, tableName); 
-				foreach (DataRow row in table.Rows) { 
-					results.Add(new DatabaseRowInfo(row)); 
+				OleDbCommand command = DatabaseUtils.GetSelectStringForTable(tableName);
+				command.Connection = (PSDriveInfo as DatabaseDriveInfo).DatabaseConnection;
+				PSObjectBuilder builder = new PSObjectBuilder();
+				using (OleDbDataReader reader = command.ExecuteReader()) {
+					while (reader.Read()) {
+						if (maxResult > 0) {
+							builder.NewInstance();
+							yield return builder.Build();
+						} else {
+							yield break;
+						}
+						maxResult--;
+					}
+					foreach (DataRow row in table.Rows) {
+						results.Add(new DatabaseRowInfo(row)); 
+					}
 				}
 			} catch (Exception e) { 
 				WriteError(new ErrorRecord(e, "CannotAccessSpecifiedRows", ErrorCategory.InvalidOperation, tableName)); 
 			}
-			return results; 
 		}
 		
 		
@@ -399,87 +391,6 @@ namespace PowerShellDBDrive.Provider
 		{ 
 			WriteError(new ErrorRecord(new ItemNotFoundException(), "RowNotFound", ErrorCategory.ObjectNotFound, row.ToString(CultureInfo.CurrentCulture))); 
 			return null; 
-		}
-		
-		/// <summary> 
-		/// Obtain a data adapter for the specified Table 
-		/// </summary> 
-		/// <param name="tableName">Name of the table to obtain the  
-		/// adapter for</param> 
-		/// <returns>Adapter object for the specified table</returns> 
-		/// <remarks>An adapter serves as a bridge between a DataSet (in memory 
-		/// representation of table) and the data source</remarks> 
-		private OleDbDataAdapter GetAdapterForTable(string tableName) 
-		{ 
-			OleDbDataAdapter da = null; 
-			DatabaseDriveInfo di = PSDriveInfo as DatabaseDriveInfo;
-			
-			if (di == null || !this.TableNameIsValid(tableName) || !this.TableIsPresent(tableName)) { 
-				return null;
-			} 
-	 
-			OleDbConnection connection = di.Connection; 
-
-			try { 
-				// Create an OleDb data adapter. This can be used to update the 
-				// data source with the records that will be created here 
-				// using data sets. 
-				string sql = String.Format("Select * from {0}",tableName);
-				da = new OleDbDataAdapter(new OleDbCommand(sql, connection)); 
-
-				// Create an OleDb command builder object. This will create sql 
-				// commands automatically for a single table, thus 
-				// eliminating the need to create new sql statements for  
-				// every operation to be done. 
-				OleDbCommandBuilder cmd = new OleDbCommandBuilder(da); 
-
-				// Set the delete command for the table here. 
-				sql = String.Format("Delete from {0} where ID = ?", tableName);
-				da.DeleteCommand = new OleDbCommand(sql, connection);
-
-				// Specify a DeleteCommand parameter based on the "ID"  
-				// column. 
-				da.DeleteCommand.Parameters.Add(new OleDbParameter()); 
-				da.DeleteCommand.Parameters[0].SourceColumn = "ID"; 
-
-				// Create an InsertCommand based on the sql string 
-				// Insert into "tablename" values (?,?,?)" where 
-				// ? represents a column in the table. Note that  
-				// the number of ? will be equal to the number of  
-				// columns. 
-				DataSet ds = new DataSet(); 
-
-				da.FillSchema(ds, SchemaType.Source); 
-				ds.Locale = CultureInfo.InvariantCulture; 
-
-				sql = "Insert into " + tableName + " values ( "; 
-				for (int i = 0; i < ds.Tables["Table"].Columns.Count; i++) 
-				{ 
-				  sql += "?, "; 
-				} 
-
-				sql = sql.Substring(0, sql.Length - 2);
-				sql += ")";
-				da.InsertCommand = new OleDbCommand(sql, connection); 
-
-				// Create parameters for the InsertCommand based on the 
-				// captions of each column. 
-				for (int i = 0; i < ds.Tables["Table"].Columns.Count; i++) { 
-					da.InsertCommand.Parameters.Add(new OleDbParameter()); 
-					da.InsertCommand.Parameters[i].SourceColumn = ds.Tables["Table"].Columns[i].Caption; 
-				} 
-
-				// Open the connection if it is not already open.                  
-				if (connection.State != ConnectionState.Open) { 
-					connection.Open(); 
-				}
-			} 
-			catch (Exception e) 
-			{ 
-				WriteError(new ErrorRecord(e, "CannotAccessSpecifiedTable", ErrorCategory.InvalidOperation, tableName)); 
-			} 
-
-			return da; 
 		}
 		
 		#endregion Item Methods

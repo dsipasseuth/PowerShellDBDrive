@@ -1,6 +1,7 @@
 using System;
-using System.Management.Automation;
 using System.Text.RegularExpressions;
+using System.Data.OleDb;
+using System.Management.Automation;
 
 namespace PowerShellDBDrive {
 	
@@ -47,7 +48,12 @@ namespace PowerShellDBDrive {
 		/// <summary> 
 		/// The valid path separator character. 
 		/// </summary>
-		public const string PATH_SEPARATOR = "\\"; 
+		public const string PATH_SEPARATOR = "\\";
+		
+		/// <summary>
+		/// Select string to be used
+		/// </summary> 
+		public const string SELECT_STRING_FORMAT = "Select * From {0}";
 		
 		/// <summary> 
 		/// Checks to see if the object name is valid. 
@@ -61,6 +67,51 @@ namespace PowerShellDBDrive {
 				return true;
 			}
 			return false; 
+		}
+		
+		/// <summary> 
+		/// Create OleDbCommand object for select query
+		/// </summary> 
+		/// <param name="tableName">table to query on</param> 
+		/// <returns>a new OleDbCommand without connection associated.</returns> 
+		public static OleDbCommand GetSelectStringForTable(string tableName) {
+			return new OleDbCommand(String.Format(SELECT_STRING_FORMAT, tableName));
+		}
+	}
+	
+	/// <summary> 
+	/// Builder for PSObject.
+	/// </summary> 
+	public class PSObjectBuilder {
+		
+		private PSObject currentInstance;
+		
+		public void NewInstance() {
+			currentInstance = new PSObject();
+		}
+		
+		public void addField(String fieldName, Object fieldValue) {
+			if (fieldValue == null) {
+				currentInstance.Members.Add(new PSNoteProperty(fieldName, String.Empty));
+			} else if (fieldValue as string == null) {
+				currentInstance.Members.Add(new PSNoteProperty(fieldName, fieldValue as string));
+			}
+		}
+		
+		public void addField(String fieldName, String fieldValue) {
+			currentInstance.Members.Add(new PSNoteProperty(fieldName, fieldValue));
+		}
+		
+		public void addField(String fieldName, int fieldValue) {
+			currentInstance.Members.Add(new PSNoteProperty(fieldName, fieldValue));
+		}
+		
+		public void addField(String fieldName, double fieldValue) {
+			currentInstance.Members.Add(new PSNoteProperty(fieldName, fieldValue));
+		}
+		
+		public PSObject Build() {
+			return currentInstance;
 		}
 	}
 }
