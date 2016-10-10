@@ -5,8 +5,7 @@ namespace PowerShellDBDrive
 {
     public class DatabaseParameters
     {
-        public DatabaseParameters()
-        {
+        public DatabaseParameters() {
 		}
 		
 		[Parameter(Mandatory=true)]
