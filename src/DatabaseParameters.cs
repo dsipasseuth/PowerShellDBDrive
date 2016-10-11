@@ -9,6 +9,9 @@ namespace PowerShellDBDrive
 		}
 		
 		[Parameter(Mandatory=true)]
-		public string ConnectionString {get; set;}
+		public string ConnectionString { get; set; }
+
+        [Parameter(Mandatory=true)]
+        public string Provider { get; set; }
 	}
 }

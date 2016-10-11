@@ -1,7 +1,7 @@
 using System;
 using System.Text.RegularExpressions;
-using System.Data.OleDb;
 using System.Management.Automation;
+using System.Data.Common;
 
 namespace PowerShellDBDrive {
 	
@@ -74,8 +74,8 @@ namespace PowerShellDBDrive {
 		/// </summary> 
 		/// <param name="tableName">table to query on</param> 
 		/// <returns>a new OleDbCommand without connection associated.</returns> 
-		public static OleDbCommand GetSelectStringForTable(string tableName) {
-			return new OleDbCommand(String.Format(SELECT_STRING_FORMAT, tableName));
+		public static string GetSelectStringForTable(string tableName) {
+			return String.Format(SELECT_STRING_FORMAT, tableName);
 		}
 	}
 	
@@ -90,7 +90,7 @@ namespace PowerShellDBDrive {
 			currentInstance = new PSObject();
 		}
 		
-		public void addField(String fieldName, Object fieldValue) {
+		public void AddField(String fieldName, Object fieldValue) {
 			if (fieldValue == null) {
 				currentInstance.Members.Add(new PSNoteProperty(fieldName, String.Empty));
 			} else if (fieldValue as string == null) {
@@ -98,15 +98,15 @@ namespace PowerShellDBDrive {
 			}
 		}
 		
-		public void addField(String fieldName, String fieldValue) {
+		public void AddField(String fieldName, String fieldValue) {
 			currentInstance.Members.Add(new PSNoteProperty(fieldName, fieldValue));
 		}
 		
-		public void addField(String fieldName, int fieldValue) {
+		public void AddField(String fieldName, int fieldValue) {
 			currentInstance.Members.Add(new PSNoteProperty(fieldName, fieldValue));
 		}
 		
-		public void addField(String fieldName, double fieldValue) {
+		public void AddField(String fieldName, double fieldValue) {
 			currentInstance.Members.Add(new PSNoteProperty(fieldName, fieldValue));
 		}
 		

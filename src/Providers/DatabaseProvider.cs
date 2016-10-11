@@ -3,9 +3,8 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Management.Automation;
 using System.Management.Automation.Provider;
-using PowerShellDBDrive;
-using System.Data.OleDb;
 using System.Data;
+using System.Data.Common;
 
 namespace PowerShellDBDrive.Provider
 {
@@ -41,9 +40,16 @@ namespace PowerShellDBDrive.Provider
 			}
 			var driveParams = this.DynamicParameters as DatabaseParameters;
 			var driveInfo = new DatabaseDriveInfo(drive, driveParams);
-			var connection = new OleDbConnection(driveParams.ConnectionString);
-			connection.Open();
-			driveInfo.DatabaseConnection = connection;
+            DbProviderFactory factory = DbProviderFactories.GetFactory(driveParams.Provider);
+            DbConnectionStringBuilder connectionStringBuilder = factory.CreateConnectionStringBuilder();
+            connectionStringBuilder.ConnectionString = driveParams.ConnectionString;
+            WriteDebug("Connection Information");
+            foreach (string key in connectionStringBuilder.Keys)
+            {
+                WriteDebug(String.Format("{0} : {1}", key, connectionStringBuilder[key]));
+            }
+			driveInfo.DatabaseConnection = factory.CreateConnection();
+            driveInfo.DatabaseConnection.ConnectionString = connectionStringBuilder.ConnectionString;
             return driveInfo;
         }
 		
@@ -94,7 +100,6 @@ namespace PowerShellDBDrive.Provider
 				return false;
 			} 
 		}
-		
 		
 		/// <summary> 
 		/// Separates the path into individual elements. 
@@ -175,11 +180,9 @@ namespace PowerShellDBDrive.Provider
 		/// <returns>Normalized path.</returns> 
 		private string NormalizePath(string path) { 
 			string result = path;
-			
 			if (!String.IsNullOrEmpty(path)) { 
 				result = path.Replace("/", DatabaseUtils.PATH_SEPARATOR); 
-			} 
-
+			}
 			return result; 
 		}
 		
@@ -189,6 +192,7 @@ namespace PowerShellDBDrive.Provider
 		/// <param name="path">Path from which drive needs to be removed</param> 
 		/// <returns>Path with drive information removed</returns> 
 		private string StripDriveFromPath(string path) {
+            WriteDebug(String.Format("StripDriveFromPath:{0}", path));
 			if (String.IsNullOrEmpty(path)) {
 				return String.Empty;
 			}
@@ -216,7 +220,8 @@ namespace PowerShellDBDrive.Provider
 		/// path.</param> 
 		/// <param name="key">Primary key value obtained from the path.</param> 
 		/// <returns>What the path represents</returns> 
-		private PathType GetNamesFromPath(string path, out string schemaName, out string tableName, out string key) { 
+		private PathType GetNamesFromPath(string path, out string schemaName, out string tableName, out string key) {
+            WriteDebug(String.Format("GetNamesFromPath:{0}", path));
 			PathType retVal = PathType.Invalid;
 			key = null;
 			tableName = null;
@@ -311,32 +316,26 @@ namespace PowerShellDBDrive.Provider
 		/// </returns> 
 		private IEnumerable<DatabaseTableInfo> GetTables() 
 		{
-			// Using the OleDb connection to the database get the schema of tables. 
 			DatabaseDriveInfo di = this.PSDriveInfo as DatabaseDriveInfo;
 			if (di == null) {
 				yield break;
 			}
-			OleDbConnection connection = di.DatabaseConnection;
+			DbConnection connection = di.DatabaseConnection;
 			DataTable dt = connection.GetSchema("Tables");
-			int count;
-	 
-			// Iterate through all the rows in the schema and create DatabaseTableInfo 
-			// objects which represents a table. 
-			foreach (DataRow dr in dt.Rows) { 
-				string tableName = dr["TABLE_NAME"] as string;
-				DataColumnCollection columns = null;
 
-				// Find the number of rows in the table.
-				try {
-					string cmd = String.Format("Select count(*) from {0}", tableName);
-					OleDbCommand command = new OleDbCommand(cmd, connection);
-					count = (int)command.ExecuteScalar(); 
-				} catch {
-					count = 0;
-				}
-				// Create the DatabaseTableInfo object representing the table. 
-				yield return new DatabaseTableInfo(dr, tableName, count, columns);
-			}
+            // Iterate through all the rows in the schema and create DatabaseTableInfo 
+            // objects which represents a table. 
+            using (DbCommand command = (PSDriveInfo as DatabaseDriveInfo).DatabaseConnection.CreateCommand())
+            {
+                foreach (DataRow dr in dt.Rows)
+                {
+                    string tableName = dr["TABLE_NAME"] as string;
+                    DataColumnCollection columns = null;
+                    string cmd = String.Format("Select count(1) from {0}", tableName);
+                    command.CommandText = cmd;
+                    yield return new DatabaseTableInfo(dr, tableName, (int)command.ExecuteScalar() , columns);
+                }
+            }
 		}
 		
 		/// <summary> 
@@ -346,36 +345,41 @@ namespace PowerShellDBDrive.Provider
 		private IEnumerable<DatabaseSchemaInfo> GetSchemas() { 
 			return new List<DatabaseSchemaInfo>();
 		}
-		
-		/// <summary> 
-		/// Return row information from a specified table. 
-		/// </summary> 
-		/// <param name="tableName">The name of the database table from  
-		/// which to retrieve rows.</param> 
-		/// <returns>Collection of row information objects.</returns> 
-		private IEnumerable<DatabaseRowInfo> GetRows(string tableName, int maxResult) {
-			// Obtain the rows in the table and add them to the collection. 
-			try {
-				OleDbCommand command = DatabaseUtils.GetSelectStringForTable(tableName);
-				command.Connection = (PSDriveInfo as DatabaseDriveInfo).DatabaseConnection;
-				PSObjectBuilder builder = new PSObjectBuilder();
-				using (OleDbDataReader reader = command.ExecuteReader()) {
-					while (reader.Read()) {
-						if (maxResult > 0) {
-							builder.NewInstance();
-							yield return builder.Build();
-						} else {
-							yield break;
-						}
-						maxResult--;
-					}
-					foreach (DataRow row in table.Rows) {
-						results.Add(new DatabaseRowInfo(row)); 
-					}
-				}
-			} catch (Exception e) { 
-				WriteError(new ErrorRecord(e, "CannotAccessSpecifiedRows", ErrorCategory.InvalidOperation, tableName)); 
-			}
+
+        /// <summary> 
+        /// Return row information from a specified table. 
+        /// </summary> 
+        /// <param name="tableName">The name of the database table from which to retrieve rows.</param>
+        /// <param name="maxResult">Maximum number of rows we should return</param>
+        /// <returns>Collection of row information objects.</returns> 
+        private IEnumerable<PSObject> GetRows(string tableName, int maxResult) {
+            DatabaseDriveInfo di = this.PSDriveInfo as DatabaseDriveInfo;
+            if (di == null)
+            {
+                yield break;
+            }
+            using (DbCommand command = di.DatabaseConnection.CreateCommand())
+            {
+                DatabaseUtils.GetSelectStringForTable(tableName);
+                PSObjectBuilder builder = new PSObjectBuilder();
+                using (DbDataReader reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        if (maxResult > 0)
+                        {
+                            builder.NewInstance();
+                            builder.AddField("test", "coucou");
+                            yield return builder.Build();
+                        }
+                        else
+                        {
+                            yield break;
+                        }
+                        maxResult--;
+                    }
+                }
+            }
 		}
 		
 		
@@ -389,7 +393,7 @@ namespace PowerShellDBDrive.Provider
 		/// <returns>The specified table row.</returns> 
 		private DatabaseRowInfo GetRow(string tableName, string row) 
 		{ 
-			WriteError(new ErrorRecord(new ItemNotFoundException(), "RowNotFound", ErrorCategory.ObjectNotFound, row.ToString(CultureInfo.CurrentCulture))); 
+			WriteError(new ErrorRecord(new ItemNotFoundException(), "RowNotFound", ErrorCategory.ObjectNotFound, row)); 
 			return null; 
 		}
 		

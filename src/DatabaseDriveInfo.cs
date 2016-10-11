@@ -1,6 +1,5 @@
-using System;
 using System.Management.Automation;
-using System.Data.OleDb;
+using System.Data.Common;
 
 namespace PowerShellDBDrive
 {
@@ -11,6 +10,6 @@ namespace PowerShellDBDrive
 			
         }
 		
-		public OleDbConnection DatabaseConnection { get; set; }
+		public DbConnection DatabaseConnection { get; set; }
     }
 }
