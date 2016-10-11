@@ -11,6 +11,8 @@ namespace PowerShellDBDrive.Provider
     [CmdletProvider( "DatabaseProvider", ProviderCapabilities.None )]
     public class DatabaseProvider : NavigationCmdletProvider 
     {
+		public const int DEFAULT_PS
+		
 		#region Drive Manipulation 
 		
 		/// <summary> 
@@ -34,7 +36,7 @@ namespace PowerShellDBDrive.Provider
 				return null;
 			}
 			
-			if (String.IsNullOrEmpty(drive.Root)) {
+			if (drive.Root == null) {
 				WriteError(new ErrorRecord(new ArgumentNullException("drive.Root"),"NullRoot",ErrorCategory.InvalidArgument,null));
 				return null;
 			}
@@ -121,6 +123,13 @@ namespace PowerShellDBDrive.Provider
 		/// </summary> 
 		/// <param name="path">The path to the item to return.</param> 
 		protected override void GetItem(string path) {
+			
+			DatabaseDriveInfo di = this.PSDriveInfo as DatabaseDriveInfo;
+            if (di == null)
+            {
+                return;
+            }
+			
 			// Check to see if the supplied path is to a drive. 
 			if (PathIsDrive(path)) {
 				WriteItemObject(PSDriveInfo, path, true); 
@@ -133,18 +142,23 @@ namespace PowerShellDBDrive.Provider
 			string tableName;
 			string key;
 			
-			PathType type = GetNamesFromPath(path, out schemaName, out tableName, out key); 
+			PathType type = GetNamesFromPath(path, out schemaName, out tableName, out key);
+			
 			switch (type) {
+				case PathType.Database : 
+					PSObject[] schemas = di.GetSchemas();
+					WriteItemObject(schemas, path, true);
+					break;
 				case PathType.Schema :
-					DatabaseSchemaInfo schema = GetSchemas().Where( s => String.Equals(schemaName, s.Name, StringComparison.OrdinalIgnoreCase)).First();
-					WriteItemObject(schema, path, true);
+					PSObject[] tables = di.GetTables(schemaName);
+					WriteItemObject(tables, path, true);
 					break;
 				case PathType.Table : 
-					DatabaseTableInfo table = GetTables().Where( s => String.Equals(tableName, s.Name, StringComparison.OrdinalIgnoreCase)).First();; 
-					WriteItemObject(table, path, true);
+					PSObject[] rows = di.GetRows(tableName);
+					WriteItemObject(rows, path, true);
 					break;
 				case PathType.Row : 
-					DatabaseRowInfo row = GetRow(tableName, key);
+					DatabaseRowInfo row = di.GetRow(tableName, key);
 					WriteItemObject(row, path, false);
 					break;
 				default : 
@@ -304,97 +318,6 @@ namespace PowerShellDBDrive.Provider
 				return false;
 			} 
 			return true;
-		}
-		
-		/// TODO Rewrite
-		/// <summary> 
-		/// Retrieve the list of tables from the database. 
-		/// </summary> 
-		/// <returns> 
-		/// Collection of DatabaseTableInfo objects, each object representing 
-		/// information about one database table
-		/// </returns> 
-		private IEnumerable<DatabaseTableInfo> GetTables() 
-		{
-			DatabaseDriveInfo di = this.PSDriveInfo as DatabaseDriveInfo;
-			if (di == null) {
-				yield break;
-			}
-			DbConnection connection = di.DatabaseConnection;
-			DataTable dt = connection.GetSchema("Tables");
-
-            // Iterate through all the rows in the schema and create DatabaseTableInfo 
-            // objects which represents a table. 
-            using (DbCommand command = (PSDriveInfo as DatabaseDriveInfo).DatabaseConnection.CreateCommand())
-            {
-                foreach (DataRow dr in dt.Rows)
-                {
-                    string tableName = dr["TABLE_NAME"] as string;
-                    DataColumnCollection columns = null;
-                    string cmd = String.Format("Select count(1) from {0}", tableName);
-                    command.CommandText = cmd;
-                    yield return new DatabaseTableInfo(dr, tableName, (int)command.ExecuteScalar() , columns);
-                }
-            }
-		}
-		
-		/// <summary> 
-		/// Return all schemas information. 
-		/// </summary> 
-		/// <returns>Collection of schema information objects.</returns> 
-		private IEnumerable<DatabaseSchemaInfo> GetSchemas() { 
-			return new List<DatabaseSchemaInfo>();
-		}
-
-        /// <summary> 
-        /// Return row information from a specified table. 
-        /// </summary> 
-        /// <param name="tableName">The name of the database table from which to retrieve rows.</param>
-        /// <param name="maxResult">Maximum number of rows we should return</param>
-        /// <returns>Collection of row information objects.</returns> 
-        private IEnumerable<PSObject> GetRows(string tableName, int maxResult) {
-            DatabaseDriveInfo di = this.PSDriveInfo as DatabaseDriveInfo;
-            if (di == null)
-            {
-                yield break;
-            }
-            using (DbCommand command = di.DatabaseConnection.CreateCommand())
-            {
-                DatabaseUtils.GetSelectStringForTable(tableName);
-                PSObjectBuilder builder = new PSObjectBuilder();
-                using (DbDataReader reader = command.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        if (maxResult > 0)
-                        {
-                            builder.NewInstance();
-                            builder.AddField("test", "coucou");
-                            yield return builder.Build();
-                        }
-                        else
-                        {
-                            yield break;
-                        }
-                        maxResult--;
-                    }
-                }
-            }
-		}
-		
-		
-		/// TODO Rewrite to make select statement.
-	    /// <summary> 
-		/// Retrieves a single row from the named table. 
-		/// </summary> 
-		/// <param name="tableName">The table that contains the  
-		/// numbered row.</param> 
-		/// <param name="row">The index of the row to return.</param> 
-		/// <returns>The specified table row.</returns> 
-		private DatabaseRowInfo GetRow(string tableName, string row) 
-		{ 
-			WriteError(new ErrorRecord(new ItemNotFoundException(), "RowNotFound", ErrorCategory.ObjectNotFound, row)); 
-			return null; 
 		}
 		
 		#endregion Item Methods
