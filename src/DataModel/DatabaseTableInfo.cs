@@ -7,12 +7,12 @@ namespace PowerShellDBDrive {
 	/// Similar to the DirectoryInfo class. 
 	/// </summary> 
 	public class DatabaseTableInfo 
-	{ 
+	{
 		/// <summary> 
-		/// Information about a row. 
+		/// The name of a schema. 
 		/// </summary> 
-		public DataRow Data { get; set; }
-
+		public string SchemaName { get; set; }
+		
 		/// <summary> 
 		/// The name of a table. 
 		/// </summary> 
@@ -21,12 +21,12 @@ namespace PowerShellDBDrive {
 		/// <summary> 
 		/// The number of rows in a table. 
 		/// </summary> 
-		public int RowCount { get; set; }
-
+		public long RowCount { get; set; }
+		
 		/// <summary> 
-		/// The column difinition of a table. 
+		/// Definitions of columns.
 		/// </summary> 
-		public DataColumnCollection Columns { get; set; }
+		public DatabaseColumnInfo[] Columns { get; set; }
 
 		/// <summary> 
 		/// Initializes a new instance of the DatabaseTableInfo class. 
@@ -35,11 +35,11 @@ namespace PowerShellDBDrive {
 		/// <param name="name">The table name.</param> 
 		/// <param name="rowCount">The number of rows in the table.</param> 
 		/// <param name="columns">Information on the column tables.</param> 
-		public DatabaseTableInfo(DataRow row, string name, int rowCount, DataColumnCollection columns) { 
-			this.Name = name; 
-			this.Data = row; 
-			this.RowCount = rowCount; 
-			this.Columns = columns; 
+		public DatabaseTableInfo(string schemaName, string tableName, long rowCount, DatabaseColumnInfo[] columns) { 
+			this.SchemaName = schemaName;
+			this.Name = tableName;
+			this.RowCount = rowCount;
+			this.Columns = columns;
 		}
 	}
 }

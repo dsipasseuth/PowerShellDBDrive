@@ -77,6 +77,78 @@ namespace PowerShellDBDrive {
 		public static string GetSelectStringForTable(string tableName) {
 			return String.Format(SELECT_STRING_FORMAT, tableName);
 		}
+		
+		/// <summary> 
+		/// Ensures that the drive is removed from the specified path. 
+		/// </summary> 
+		/// <param name="path">Path from which drive needs to be removed</param> 
+		/// <returns>Path with drive information removed</returns> 
+		public static string RemoveDriveFromPath(string path, string root) 
+		{ 
+			string result = path;
+			if (result == null) 
+			{ 
+				result = String.Empty; 
+			} 
+			if (result.Contains(root)) 
+			{ 
+				result = result.Substring(result.IndexOf(root, StringComparison.OrdinalIgnoreCase) + root.Length); 
+			}
+			return result; 
+		}
+		
+		/// <summary> 
+		/// Adapts the path, making sure the correct path separator character is used. 
+		/// </summary> 
+		/// <param name="path">Path to normalize.</param> 
+		/// <returns>Normalized path.</returns> 
+		public static string NormalizePath(string path) { 
+			string result = path;
+			if (!String.IsNullOrEmpty(path)) { 
+				result = path.Replace("/", PATH_SEPARATOR); 
+			}
+			return result; 
+		}
+		
+		/// <summary> 
+		/// Separates the path into individual elements. 
+		/// </summary> 
+		/// <param name="path">The path to split.</param> 
+		/// <returns>An array of path segments.</returns> 
+		public static string[] ChunkPath(string root, string path) { 
+			// Normalize the path before separating. 
+			string normalPath = NormalizePath(path); 
+			// Return the path with the drive name and first path  
+			// separator character removed, split by the path separator. 
+			string pathNoDrive = normalPath.Replace(root + PATH_SEPARATOR, string.Empty); 
+			return pathNoDrive.Split(PATH_SEPARATOR.ToCharArray());
+		}
+		
+		/// <summary>
+		/// Checks to see if a given path is actually a drive name. 
+		/// </summary>
+		/// <param name="path">The path to investigate.</param> 
+		/// <returns>
+		/// True if the path represents a drive; otherwise false is returned. 
+		/// </returns>
+		public static bool PathIsDrive(string root, string path) {
+			if (string.IsNullOrEmpty(root)) {
+				if (string.IsNullOrEmpty(path)) {
+					return true;
+				} else {
+					return false;
+				}
+			}
+			// Remove the drive name and first path separator.  If the
+			// path is reduced to nothing, it is a drive. Also if it is
+			// just a drive then there will not be any path separators.
+			if (String.IsNullOrEmpty(path.Replace(root, string.Empty)) || 
+				String.IsNullOrEmpty(path.Replace(root + DatabaseUtils.PATH_SEPARATOR, string.Empty))) {
+				return true;
+			} else {
+				return false;
+			}
+		}
 	}
 	
 	/// <summary> 
@@ -90,15 +162,27 @@ namespace PowerShellDBDrive {
 			currentInstance = new PSObject();
 		}
 		
-		public void AddField(String fieldName, Object fieldValue) {
-			if (fieldValue == null) {
-				currentInstance.Members.Add(new PSNoteProperty(fieldName, String.Empty));
-			} else if (fieldValue as string == null) {
-				currentInstance.Members.Add(new PSNoteProperty(fieldName, fieldValue as string));
+		public void AddField(String fieldName, Object fieldValue, Type type) {
+			System.TypeCode typeCode = Type.GetTypeCode(type);
+			switch(typeCode) {
+				case TypeCode.Boolean : 
+					AddField(fieldName, (bool) fieldValue);
+					break;
+				default : 
+					if (fieldValue != null) {
+						AddField(fieldName, fieldValue.ToString());
+					} else {
+						AddField(fieldName, null);
+					}
+					break;
 			}
 		}
 		
 		public void AddField(String fieldName, String fieldValue) {
+			currentInstance.Members.Add(new PSNoteProperty(fieldName, fieldValue));
+		}
+		
+		public void AddField(String fieldName, bool fieldValue) {
 			currentInstance.Members.Add(new PSNoteProperty(fieldName, fieldValue));
 		}
 		
