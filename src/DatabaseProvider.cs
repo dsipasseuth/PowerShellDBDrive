@@ -4,9 +4,10 @@ using System.Collections.Generic;
 using System.Management.Automation;
 using System.Management.Automation.Provider;
 using System.Data;
+using PowerShellDBDrive.Drives;
 using System.Data.Common;
 
-namespace PowerShellDBDrive.Provider
+namespace PowerShellDBDrive
 {
     [CmdletProvider( "DatabaseProvider", ProviderCapabilities.None )]
     public class DatabaseProvider : NavigationCmdletProvider 
@@ -47,7 +48,7 @@ namespace PowerShellDBDrive.Provider
 			}
 			var driveParams = this.DynamicParameters as DatabaseParameters;
 			PsOutputArraySize = DEFAULT_PS_OUTPUT_ARRAY_SIZE;
-			DatabaseDriveInfo driveInfo = new DatabaseDriveInfo(drive, driveParams);
+			DatabaseDriveInfo driveInfo = DatabaseDriveInfoFactory.NewInstance(drive, driveParams);
 			WriteDebug(String.Format("Parsed Connection String : {0}", driveInfo.ParsedConnectionString));
 			return driveInfo;
         }
@@ -337,11 +338,11 @@ namespace PowerShellDBDrive.Provider
 					WriteVerbose("GetChildItems: -> Database");
 					foreach (DatabaseSchemaInfo schema in di.GetSchemas()) 
 					{
-						WriteVerbose(string.Format("GetChildItems: ---> Database schema '{0}'", schema.Name));
+						WriteVerbose(string.Format("GetChildItems: ---> Database schema '{0}'", schema.SchemaName));
 						WriteItemObject(schema, path, true);
 						if (recurse) 
 						{
-							GetChildItems(path + DatabaseUtils.PATH_SEPARATOR + schema.Name, recurse);
+							GetChildItems(path + DatabaseUtils.PATH_SEPARATOR + schema.SchemaName, recurse);
 						}
 					}
 					break;
@@ -349,11 +350,11 @@ namespace PowerShellDBDrive.Provider
 					WriteVerbose("GetChildItems: -> Schema");
 					foreach (DatabaseTableInfo table in di.GetTables(schemaName)) 
 					{
-						WriteVerbose(string.Format("GetChildItems: ---> Database table '{0}'", table.Name));
+						WriteVerbose(string.Format("GetChildItems: ---> Database table '{0}'", table.TableName));
 						WriteItemObject(table, path, true);
 						if (recurse)
 						{
-							GetChildItems(path + DatabaseUtils.PATH_SEPARATOR + table.Name, recurse);
+							GetChildItems(path + DatabaseUtils.PATH_SEPARATOR + table.TableName, recurse);
 						}
 					}
 					break;
@@ -396,13 +397,13 @@ namespace PowerShellDBDrive.Provider
 				case PathType.Database: 
 					foreach (DatabaseSchemaInfo schema in di.GetSchemas()) 
 					{
-						WriteItemObject(schema.Name, path, false); 
+						WriteItemObject(schema.SchemaName, path, false); 
 					}
 					break;
 				case PathType.Schema:
 					foreach (DatabaseTableInfo table in di.GetTables(schemaName)) 
 					{
-						WriteItemObject(table.Name, path, false); 
+						WriteItemObject(table.TableName, path, false); 
 					}
 					break;
 				case PathType.Table:

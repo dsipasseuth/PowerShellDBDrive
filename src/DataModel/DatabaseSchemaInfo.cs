@@ -8,23 +8,24 @@ namespace PowerShellDBDrive {
 	/// </summary> 
 	public class DatabaseSchemaInfo 
 	{ 
+		public long UserId { get; set; }
 		/// <summary> 
 		/// User name
 		/// </summary> 
-		public string Name {get; set;}
+		public string SchemaName { get; set; }
 		
 		/// <summary> 
-		/// Creation date time
+		/// User name
 		/// </summary> 
-		public DateTime? CreateDate {get ; set; }
+		public DateTime CreateDate { get; set; }
 		
 		/// <summary> 
 		/// Initializes a new instance of the DatabaseSchemaInfo class. 
-		/// </summary> 
-		/// <param name="row">The row information.</param> 
+		/// </summary>
 		/// <param name="name">The row index.</param> 
-		public DatabaseSchemaInfo(string name, DateTime? createdate) {
-			this.Name = name;
+		public DatabaseSchemaInfo(long userid, string name, DateTime createdate) {
+			this.UserId = userid;
+			this.SchemaName = name;
 			this.CreateDate = createdate;
 		}
 	}

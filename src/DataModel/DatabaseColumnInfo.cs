@@ -2,68 +2,70 @@ using System;
 using System.Data;
 
 namespace PowerShellDBDrive {
-	/// <summary> 
-	/// Contains information specific to the database table. 
-	/// Similar to the DirectoryInfo class. 
-	/// </summary> 
-	public class DatabaseColumnInfo 
+	
+	public interface IDatabaseColumnInfo 
 	{
-		/// <summary> 
-		/// The name of a schema. 
-		/// </summary> 
-		public string SchemaName { get; set; }
+		string SchemaName {get;}
+		string TableName {get;}
+		string ColumnName {get;}
+		bool Nillable {get;}
+	}
+	
+	/// <summary> 
+	/// Contains information specific to the database table column.
+	/// </summary> 
+	public class DatabaseColumnInfo : IDatabaseColumnInfo
+	{
+		public string Owner                { get; set; }
+		public string TableName            { get; set; }
+		public string ColumnName           { get; set; }
+		public string DataType             { get; set; }
+		public string DataTypeMod          { get; set; }
+		public string DataTypeOwner        { get; set; }
+		public long? DataLength           { get; set; }
+		public long? DataPrecision        { get; set; }
+		public long? DataScale            { get; set; }
+		public string Nullable             { get; set; }
+		public long? ColumnId             { get; set; }
+		public long? DefaultLength        { get; set; }
+		public long? DataDefault          { get; set; }
+		public long? NumDistinct          { get; set; }
+		public string LowValue             { get; set; }
+		public string HighValue            { get; set; }
+		public long? Density              { get; set; }
+		public long? NumNulls             { get; set; }
+		public long? NumBuckets           { get; set; }
+		public DateTime? LastAnalyzed         { get; set; }
+		public long? SampleSize           { get; set; }
+		public string CharacterSetName     { get; set; }
+		public long? CharColDeclLength    { get; set; }
+		public string GlobalStats          { get; set; }
+		public string UserStats            { get; set; }
+		public long? AvgColLen            { get; set; }
+		public long? CharLength           { get; set; }
+		public string CharUsed             { get; set; }
+		public string V80FmtImage          { get; set; }
+		public string DataUpgraded         { get; set; }
+		public string Histogram            { get; set; }
+
+		public DatabaseColumnInfo() { 
 		
-		/// <summary> 
-		/// The name of a table. 
-		/// </summary> 
-		public string TableName { get; set; }
-		
-		/// <summary> 
-		/// The name of a column. 
-		/// </summary> 
-		public string Name { get; set; }
-
-		/// <summary> 
-		/// The datatype
-		/// </summary> 
-		public string DataType { get; set; }
-
-		/// <summary> 
-		/// The length
-		/// </summary> 		
-		public int? Length { get; set; }
-
-		/// <summary> 
-		/// The precision
-		/// </summary> 		
-		public int? Precision { get; set; }
-
-		/// <summary> 
-		/// The scale
-		/// </summary> 		
-		public int? Scale { get; set; }
-
-		/// <summary> 
-		/// The nullable
-		/// </summary> 		
-		public bool Nullable { get; set; }
-
-		/// <summary> 
-		/// Initializes a new instance of the DatabaseTableInfo class. 
-		/// </summary> 
-		/// <param name="row">The row definition.</param> 
-		/// <param name="name">The table name.</param> 
-		/// <param name="rowCount">The number of rows in the table.</param> 
-		/// <param name="columns">Information on the column tables.</param> 
-		public DatabaseColumnInfo(string schemaName, string tableName, string columnName, string dataType, int? length, int? precision, int? scale, bool nullable) { 
-			this.SchemaName = schemaName;
-			this.TableName = tableName;
-			this.Name = columnName;
-			this.DataType = dataType;
-			this.Length = length;
-			this.Precision = precision;
-			this.Scale = scale;
-			this.Nullable = nullable;
 		}
+		
+		#region Interface Methods
+		
+		public string SchemaName {
+			get {
+				return Owner;
+			}
+		}
+		
+		public bool Nillable {
+			get {
+				return String.Equals(Nullable, "N");
+			}
+		}
+		
+		#endregion Interface Methods
 	}
 }
