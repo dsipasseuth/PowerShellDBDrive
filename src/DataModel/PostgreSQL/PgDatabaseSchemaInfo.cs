@@ -7,6 +7,6 @@ namespace PowerShellDBDrive.DataModel.PostgreSQL
 {
     public class PgDatabaseSchemaInfo : IDatabaseSchemaInfo
     {
-        public string SchemaName { get; }
+        public string SchemaName { get; set; }
     }
 }

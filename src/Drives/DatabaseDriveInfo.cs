@@ -68,7 +68,10 @@ namespace PowerShellDBDrive.Drives
         {
             switch (parameters.Provider)
             {
-                case "Oracle.ManagedDataAccess.Client": return new OracleDatabaseDriveInfo(driveInfo, parameters);
+                case "Oracle.ManagedDataAccess.Client":
+                    return new OracleDatabaseDriveInfo(driveInfo, parameters);
+                case "NPGSQL":
+                    return new PgDatabaseDriveInfo(driveInfo, parameters);
                 default: throw new ArgumentException(String.Format("{0} provider is not supported yet !", parameters.Provider));
             }
         }

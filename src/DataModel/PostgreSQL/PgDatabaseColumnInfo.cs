@@ -7,12 +7,12 @@ namespace PowerShellDBDrive.DataModel.PostgreSQL
 {
     public class PgDatabaseColumnInfo : IDatabaseColumnInfo
     {
-        public string ColumnName { get; }
+        public string ColumnName { get; set; }
 
-        public bool Nillable { get; }
+        public bool Nillable { get; set; }
 
-        public string SchemaName { get; }
+        public string SchemaName { get; set; }
 
-        public string TableName { get; }
+        public string TableName { get; set; }
     }
 }
