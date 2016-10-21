@@ -16,6 +16,10 @@ namespace PowerShellDBDrive.Drives
     {
         #region SQL Queries
         private const string SELECT_SCHEMAS = "SELECT USER_ID, USERNAME, CREATED FROM ALL_USERS";
+		
+        private const string SELECT_SCHEMAS_NAMES = "SELECT USERNAME FROM ALL_USERS";
+		
+		private const string SELECT_SCHEMAS_NAMES_REGEXP = "SELECT USERNAME FROM ALL_USERS WHERE REGEXP_LIKE(USERNAME, :regexp)";
 
         private const string SELECT_TABLES =
 @"SELECT 
@@ -76,6 +80,65 @@ namespace PowerShellDBDrive.Drives
 	RESULT_CACHE
 FROM ALL_TABLES WHERE OWNER = :schemaname ";
 
+private const string SELECT_SINGLE_TABLE =
+@"SELECT 
+	OWNER ,
+	TABLE_NAME ,
+	TABLESPACE_NAME ,
+	CLUSTER_NAME ,
+	IOT_NAME ,
+	STATUS ,
+	PCT_FREE ,
+	PCT_USED ,
+	INI_TRANS ,
+	MAX_TRANS ,
+	INITIAL_EXTENT ,
+	NEXT_EXTENT ,
+	MIN_EXTENTS ,
+	MAX_EXTENTS ,
+	PCT_INCREASE ,
+	FREELISTS ,
+	FREELIST_GROUPS ,
+	LOGGING ,
+	BACKED_UP ,
+	NUM_ROWS ,
+	BLOCKS ,
+	EMPTY_BLOCKS ,
+	AVG_SPACE ,
+	CHAIN_CNT ,
+	AVG_ROW_LEN ,
+	AVG_SPACE_FREELIST_BLOCKS ,
+	NUM_FREELIST_BLOCKS ,
+	DEGREE ,
+	INSTANCES ,
+	CACHE ,
+	TABLE_LOCK ,
+	SAMPLE_SIZE ,
+	LAST_ANALYZED ,
+	PARTITIONED ,
+	IOT_TYPE ,
+	TEMPORARY ,
+	SECONDARY ,
+	NESTED ,
+	BUFFER_POOL ,
+	FLASH_CACHE ,
+	CELL_FLASH_CACHE ,
+	ROW_MOVEMENT ,
+	GLOBAL_STATS ,
+	USER_STATS ,
+	DURATION ,
+	SKIP_CORRUPT ,
+	MONITORING ,
+	CLUSTER_OWNER ,
+	DEPENDENCIES ,
+	COMPRESSION ,
+	COMPRESS_FOR ,
+	DROPPED ,
+	READ_ONLY ,
+	SEGMENT_CREATED ,
+	RESULT_CACHE
+FROM ALL_TABLES WHERE OWNER = :schemaname AND TABLE_NAME = :tablename ";
+
         private const string SELECT_COLUMNS =
 @"SELECT Owner ,
   Table_Name ,
@@ -110,6 +173,10 @@ FROM ALL_TABLES WHERE OWNER = :schemaname ";
   Histogram
 FROM ALL_TAB_COLUMNS WHERE OWNER = :schemaname AND TABLE_NAME = :tablename";
 
+		private const string SELECT_TABLES_NAMES = "SELECT TABLE_NAME FROM ALL_TABLES WHERE OWNER = :schemaname ";
+		
+		private const string SELECT_TABLES_NAMES_REGEXP = "SELECT TABLE_NAME FROM ALL_TABLES WHERE OWNER = :schemaname AND REGEXP_LIKE(TABLE_NAME, :regexp)";
+		
         #endregion SQL Queries
 
         public OracleDatabaseDriveInfo(PSDriveInfo driveInfo, DatabaseParameters parameters) : base(driveInfo, parameters)
@@ -145,9 +212,35 @@ FROM ALL_TAB_COLUMNS WHERE OWNER = :schemaname AND TABLE_NAME = :tablename";
                 connection.Open();
                 using (DbCommand command = connection.CreateCommand())
                 {
-                    command.CommandText = SELECT_SCHEMAS;
+                    command.CommandText = SELECT_SCHEMAS_NAMES;
                     command.CommandTimeout = Timeout;
                     command.CommandType = CommandType.Text;
+                    using (DbDataReader reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            yield return reader["USERNAME"] as string;
+                        }
+                    }
+                }
+            }
+        }
+		
+        public override IEnumerable<String> GetSchemasNames(string regexp)
+        {
+            using (DbConnection connection = GetConnection())
+            {
+                connection.Open();
+                using (DbCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = SELECT_SCHEMAS_NAMES_REGEXP;
+                    command.CommandTimeout = Timeout;
+                    command.CommandType = CommandType.Text;
+					DbParameter parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "regexp";
+                    parameter.Value = "^" + regexp;
+                    command.Parameters.Add(parameter);
                     using (DbDataReader reader = command.ExecuteReader())
                     {
                         while (reader.Read())
@@ -191,6 +284,61 @@ FROM ALL_TAB_COLUMNS WHERE OWNER = :schemaname AND TABLE_NAME = :tablename";
                 }
             }
         }
+		
+        public override IEnumerable<String> GetTablesNames(string schemaName) {
+			using (DbConnection connection = GetConnection())
+            {
+                connection.Open();
+                using (DbCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = SELECT_TABLES_NAMES;
+                    command.CommandTimeout = Timeout;
+                    command.CommandType = CommandType.Text;
+                    DbParameter parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "schemaname";
+                    parameter.Value = schemaName;
+                    command.Parameters.Add(parameter);
+                    using (DbDataReader reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            yield return reader["TABLE_NAME"] as string;
+                        }
+                    }
+                }
+            }
+		}
+		
+		public override IEnumerable<String> GetTablesNames(string schemaName, string tableName) {
+			using (DbConnection connection = GetConnection())
+            {
+                connection.Open();
+                using (DbCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = SELECT_TABLES_NAMES_REGEXP;
+                    command.CommandTimeout = Timeout;
+                    command.CommandType = CommandType.Text;
+                    DbParameter parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "schemaname";
+                    parameter.Value = schemaName;
+                    command.Parameters.Add(parameter);
+					parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "regexp";
+                    parameter.Value = schemaName;
+                    command.Parameters.Add(parameter);
+                    using (DbDataReader reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            yield return reader["TABLE_NAME"] as string;
+                        }
+                    }
+                }
+            }
+		}
 
         private IEnumerable<IDatabaseColumnInfo> GetDatabaseColumnsInfo(string schemaName, string tableName)
         {
@@ -202,11 +350,13 @@ FROM ALL_TAB_COLUMNS WHERE OWNER = :schemaname AND TABLE_NAME = :tablename";
                     command.CommandText = SELECT_COLUMNS;
                     command.CommandTimeout = Timeout;
                     command.CommandType = CommandType.Text;
+					
                     DbParameter parameter = command.CreateParameter();
                     parameter.DbType = DbType.String;
                     parameter.ParameterName = "schemaname";
                     parameter.Value = schemaName;
                     command.Parameters.Add(parameter);
+					
                     parameter = command.CreateParameter();
                     parameter.DbType = DbType.String;
                     parameter.ParameterName = "tablename";
@@ -225,8 +375,39 @@ FROM ALL_TAB_COLUMNS WHERE OWNER = :schemaname AND TABLE_NAME = :tablename";
 
         public override IDatabaseTableInfo GetTable(string schemaName, string tableName)
         {
-            var tableList = GetTables(schemaName);
-            return (from table in tableList where tableName.Equals(tableName) select table).FirstOrDefault();
+            using (DbConnection connection = GetConnection())
+            {
+                connection.Open();
+                using (DbCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = SELECT_SINGLE_TABLE;
+                    command.CommandTimeout = Timeout;
+                    command.CommandType = CommandType.Text;
+					
+                    DbParameter parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "schemaname";
+                    parameter.Value = schemaName;
+                    command.Parameters.Add(parameter);
+					
+					parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "tablename";
+                    parameter.Value = tableName;
+                    command.Parameters.Add(parameter);
+					
+                    using (DbDataReader reader = command.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            OracleDatabaseTableInfo dti = BuildDatabaseTableInfo(reader);
+                            dti.Columns = GetDatabaseColumnsInfo(schemaName, dti.TableName).ToArray();
+                            return dti;
+                        }
+						return null;
+                    }
+                }
+            }
         }
 
         public override IEnumerable<PSObject> GetRows(string schemaName, string tableName, int maxResult)

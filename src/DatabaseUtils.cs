@@ -90,7 +90,7 @@ namespace PowerShellDBDrive {
 			{ 
 				result = String.Empty; 
 			} 
-			if (result.Contains(root)) 
+			if (result.StartsWith(root)) 
 			{ 
 				result = result.Substring(result.IndexOf(root, StringComparison.OrdinalIgnoreCase) + root.Length); 
 			}
@@ -104,7 +104,7 @@ namespace PowerShellDBDrive {
 		/// <returns>Normalized path.</returns> 
 		public static string NormalizePath(string path) { 
 			string result = path;
-			if (!String.IsNullOrEmpty(path)) { 
+			if (!string.IsNullOrEmpty(path)) { 
 				result = path.Replace("/", PATH_SEPARATOR); 
 			}
 			return result; 
@@ -114,7 +114,8 @@ namespace PowerShellDBDrive {
 		/// Separates the path into individual elements. 
 		/// </summary> 
 		/// <param name="path">The path to split.</param> 
-		/// <returns>An array of path segments.</returns> 
+		/// <param name="root">The Root.</param>
+		/// <returns>An array of path segments.</returns>
 		public static string[] ChunkPath(string root, string path) { 
 			// Normalize the path before separating. 
 			string normalPath = NormalizePath(path); 

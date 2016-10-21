@@ -154,11 +154,17 @@ namespace PowerShellDBDrive.Drives
         public abstract IEnumerable<IDatabaseSchemaInfo> GetSchemas();
 
         public abstract IEnumerable<String> GetSchemasNames();
+		
+		public abstract IEnumerable<String> GetSchemasNames(string regexp);
 
         public abstract IDatabaseSchemaInfo GetSchema(string schemaName);
 
         public abstract IEnumerable<IDatabaseTableInfo> GetTables(string schemaName);
 
+        public abstract IEnumerable<String> GetTablesNames(string schemaName);
+		
+		public abstract IEnumerable<String> GetTablesNames(string schemaName, string tableName);
+		
         public abstract IDatabaseTableInfo GetTable(string schemaName, string tableName);
 
         public abstract IEnumerable<PSObject> GetRows(string schemaName, string tableName, int maxResult);

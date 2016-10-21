@@ -158,6 +158,32 @@ FROM ALL_TAB_COLUMNS WHERE OWNER = :schemaname AND TABLE_NAME = :tablename";
                 }
             }
         }
+		
+        public override IEnumerable<String> GetSchemasNames(string regexp)
+        {
+            using (DbConnection connection = GetConnection())
+            {
+                connection.Open();
+                using (DbCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = SELECT_SCHEMAS;
+                    command.CommandTimeout = Timeout;
+                    command.CommandType = CommandType.Text;
+					DbParameter parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "regexp";
+                    parameter.Value = "^" + regexp;
+                    command.Parameters.Add(parameter);
+                    using (DbDataReader reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            yield return reader["USERNAME"] as string;
+                        }
+                    }
+                }
+            }
+        }
 
         public override IDatabaseSchemaInfo GetSchema(string schemaName)
         {
@@ -222,6 +248,14 @@ FROM ALL_TAB_COLUMNS WHERE OWNER = :schemaname AND TABLE_NAME = :tablename";
                 }
             }
         }
+		
+        public override IEnumerable<String> GetTablesNames(string schemaName) {
+			return null;
+		}
+		
+		public override IEnumerable<String> GetTablesNames(string schemaName, string tableName) {
+			return null;
+		}
 
         public override IDatabaseTableInfo GetTable(string schemaName, string tableName)
         {
