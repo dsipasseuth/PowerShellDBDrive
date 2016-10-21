@@ -483,24 +483,18 @@ namespace PowerShellDBDrive
             // If the root is specified then the path has to contain 
             // the root. If not nothing should be returned.
             WriteVerbose(string.Format("GetParentPath: <- Path='{0}', Root='{1}'", path, root));
-			
-			path = DatabaseUtils.NormalizePath(path);
-			
-			if (path.Equals(GetRootDrive())) {
-				return "";
-			}
-			
-            if (string.IsNullOrEmpty(path))
-            {
-				WriteVerbose(string.Format("GetParentPath: -> '{0}'", GetRootDrive()));
-                return GetRootDrive();
-            }
+			if (!String.IsNullOrEmpty(root)) 
+			{ 
+				if (!path.Contains(root)) 
+				{ 
+					return null; 
+				} 
+			} 
 			if (!path.Contains(DatabaseUtils.PATH_SEPARATOR)) {
-				WriteVerbose(string.Format("GetParentPath: -> '{0}'", GetRootDrive()));
-				return GetRootDrive();
+				return root;
 			}
-			
-			string result = path.Substring(0, path.LastIndexOf(DatabaseUtils.PATH_SEPARATOR, StringComparison.OrdinalIgnoreCase));
+		 
+			string result = path.Substring(0, path.LastIndexOf(DatabaseUtils.PATH_SEPARATOR, StringComparison.OrdinalIgnoreCase)); 
 			WriteVerbose(string.Format("GetParentPath: -> '{0}'", result));
             return result;
         }
@@ -604,25 +598,26 @@ namespace PowerShellDBDrive
 		{
 			WriteVerbose(string.Format("ExpandPath: <- {0}", path));
 			DatabaseDriveInfo di = PSDriveInfo as DatabaseDriveInfo;
-			if (PSDriveInfo == null) {
+			if (di == null) {
 				return null;
 			}
-			string schemaName;
-            string tableName;
-            string key;
+			return di.GetSchemasNames(path).ToArray();
+			//string schemaName;
+            //string tableName;
+            //string key;
 
-            PathType type = GetNamesFromPath(path, out schemaName, out tableName, out key);
+            //PathType type = GetNamesFromPath(path, out schemaName, out tableName, out key);
 			
-			switch(type) {
-				case PathType.Database : 
-					return di.GetSchemasNames("").ToArray();
-				case PathType.Schema : 
-					return di.GetSchemasNames(schemaName).ToArray();
-				case PathType.Table : 
-					return di.GetTablesNames(tableName).ToArray();
-				default : 
-					return null;
-			}
+			//switch(type) {
+				//case PathType.Database : 
+					//return di.GetSchemasNames("").ToArray();
+				//case PathType.Schema : 
+					//return di.GetSchemasNames(schemaName).ToArray();
+				//case PathType.Table : 
+					//return di.GetTablesNames(tableName).ToArray();
+				//default : 
+					//return null;
+			//}
 		}
 		
 		#endregion Provider Capabilities
