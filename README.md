@@ -41,10 +41,13 @@ oracledb:\schemaname\tablename> ls
 ```
 
 Obviously, it's compatible with other PowerShell Commands. 
+
 This could be more efficient if we could give Get-ChildItem via dynamic parameters the columns to retrieve.
-Filter support for Get-ChildItem would also a nice feature to be add.
+
+Filter support for Get-ChildItem would also be a nice feature to be add.
 
 ```powershell
+# This command should export the first 100 lines of tablename into a CSV using UTF-8 (with bom)
 oracledb:\schemaname\tablename> ls | select -property Id,Name,SomeColumns | ConvertTo-Csv -NoTypeInformation | Out-File C:\Temp\Test.csv -Encoding UTF8
 ```
 
