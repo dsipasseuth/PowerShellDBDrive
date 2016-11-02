@@ -34,10 +34,12 @@ oracledb:\> ls
 ... [should return all schema/user]
 oracledb:\> cd schemaname
 oracledb:\schemaname> ls
-... [should return all tables of given schema]
-oracledb:\schemaname> cd tablename
-oracledb:\schemaname\tablename> ls
-... [should return the 100 first lines of table]
+... [should return all supported object types (table or view for now) of given schema]
+oracledb:\schemaname> cd TABLE
+oracledb:\schemaname\TABLE> ls
+... [should return all the object of given type (all tables in this case)]
+oracledb:\schemaname\TABLE> cd tablename
+oracledb:\schemaname\TABLE\tablename> ls
 ```
 
 Obviously, it's compatible with other PowerShell Commands. 
@@ -48,7 +50,7 @@ Filter support for Get-ChildItem would also be a nice feature to be add.
 
 ```powershell
 # This command should export the first 100 lines of tablename into a CSV using UTF-8 (with bom)
-oracledb:\schemaname\tablename> ls | select -property Id,Name,SomeColumns | ConvertTo-Csv -NoTypeInformation | Out-File C:\Temp\Test.csv -Encoding UTF8
+oracledb:\schemaname\table\tablename> ls | select -property Id,Name,SomeColumns | Export-Csv -NoTypeInformation -Path C:\Temp\Test.csv -Encoding UTF8
 ```
 
 # Database Supported 
