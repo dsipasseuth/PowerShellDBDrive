@@ -111,11 +111,31 @@ namespace PowerShellDBDrive.Drives
             ParsedConnectionString = csb.ConnectionString;
         }
 
+        /// <summary>
+        /// Return a new connection.
+        /// </summary>
+        /// <returns></returns>
         public DbConnection GetConnection()
         {
             DbConnection connection = Factory.CreateConnection();
             connection.ConnectionString = ParsedConnectionString;
             return connection;
+        }
+
+        /// <summary>
+        /// The root drive name. 
+        /// The root is the drive name with colon, and the path separator (like FileSystem provider)
+        /// If Root is empty or null, it will return "drivename:\"
+        /// If Root is not empty, then it will return "drivename:\Root\Path"
+        /// </summary>
+        /// <returns>The root drive name.</returns>
+        public string GetRootDrive()
+        {
+            if (string.IsNullOrEmpty(Root))
+            {
+                return Name + ":" + DatabaseUtils.PATH_SEPARATOR;
+            }
+            return Name + ":" + DatabaseUtils.PATH_SEPARATOR + Root + DatabaseUtils.PATH_SEPARATOR;
         }
 
         /// <summary> 
@@ -159,6 +179,16 @@ namespace PowerShellDBDrive.Drives
 
         public abstract IDatabaseSchemaInfo GetSchema(string schemaName);
 
+        public abstract IEnumerable<ObjectType> GetSupportedObjectTypes(string schemaName);
+
+        public abstract IEnumerable<IDatabaseViewInfo> GetViews(string schemaName);
+
+        public abstract IEnumerable<String> GetViewsNames(string schemaName);
+
+        public abstract IEnumerable<String> GetViewsNames(string schemaName, string viewName);
+
+        public abstract IDatabaseViewInfo GetView(string schemaName, string viewName);
+
         public abstract IEnumerable<IDatabaseTableInfo> GetTables(string schemaName);
 
         public abstract IEnumerable<String> GetTablesNames(string schemaName);
@@ -168,6 +198,10 @@ namespace PowerShellDBDrive.Drives
         public abstract IDatabaseTableInfo GetTable(string schemaName, string tableName);
 
         public abstract IEnumerable<PSObject> GetRows(string schemaName, string tableName, int maxResult);
+
+        public abstract bool IsSchemaExist(string schemaName);
+
+        public abstract bool IsObjectExist(string schemaName, ObjectType objectType, string[] objectPath);
 
         #endregion IDatabaseDriveInfo Methods
     }

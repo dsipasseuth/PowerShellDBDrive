@@ -18,8 +18,8 @@ namespace PowerShellDBDrive.Drives
 
 		private const string SELECT_DATABASES = "SELECT datname FROM pg_database WHERE datistemplate = false";
 
-        private const string SELECT_SCHEMAS = "SELECT USER_ID, USERNAME, CREATED FROM ALL_USERS";
-
+        private const string SELECT_SCHEMAS = "select catalog_name, schema_name, schema_owner from information_schema.schemata";
+		
         private const string SELECT_TABLES =
 @"SELECT 
 	table_catalog,
@@ -105,7 +105,7 @@ FROM information_schema.columns WHERE table_schema = :schemaname AND table_name 
                     {
                         while (reader.Read())
                         {
-                            yield return new PgDatabaseSchemaInfo();
+                            yield return new PgDatabaseSchemaInfo(reader.GetString(reader.GetOrdinal("CATALOG_NAME")), reader.GetString(reader.GetOrdinal("SCHEMA_NAME")), reader.GetString(reader.GetOrdinal("SCHEMA_OWNER")));
                         }
                     }
                 }
@@ -162,6 +162,31 @@ FROM information_schema.columns WHERE table_schema = :schemaname AND table_name 
         public override IDatabaseSchemaInfo GetSchema(string schemaName)
         {
             return (from s in GetSchemas() where string.Equals(s.SchemaName, schemaName, StringComparison.CurrentCultureIgnoreCase) select s).FirstOrDefault();
+        }
+
+        public override IEnumerable<ObjectType> GetSupportedObjectTypes(string schemaName)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override IEnumerable<IDatabaseViewInfo> GetViews(string schemaName)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override IEnumerable<string> GetViewsNames(string schemaName)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override IEnumerable<string> GetViewsNames(string schemaName, string viewName)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override IDatabaseViewInfo GetView(string schemaName, string viewName)
+        {
+            throw new NotImplementedException();
         }
 
         public override IEnumerable<IDatabaseTableInfo> GetTables(string schemaName)
@@ -270,7 +295,17 @@ FROM information_schema.columns WHERE table_schema = :schemaname AND table_name 
                 }
             }
         }
+        
+        public override bool IsSchemaExist(string schemaName)
+        {
+            throw new NotImplementedException();
+        }
 
+        public override bool IsObjectExist(string schemaName, ObjectType objectType, string[] objectPath)
+        {
+            throw new NotImplementedException();
+        }
+        
         #region Utility Methods 
 
 
@@ -371,6 +406,7 @@ FROM information_schema.columns WHERE table_schema = :schemaname AND table_name 
             dci.Histogram = reader["HISTOGRAM"] as string;*/
             return dci;
         }
+
         #endregion Utility Methods
     }
 }

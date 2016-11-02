@@ -98,31 +98,48 @@ namespace PowerShellDBDrive
                 return;
             }
 
-            string schemaName;
-            string tableName;
-            string key;
+            PathDescriptor pathDescriptor = new PathDescriptor(path);
 
-            PathType type = GetNamesFromPath(path, out schemaName, out tableName, out key);
-            switch (type)
+            switch (pathDescriptor.PathType)
             {
                 case PathType.Database:
                     WriteVerbose("GetItem: -> Database");
-                    WriteItemObject(PSDriveInfo, path, true);
+                    WriteItemObject(PSDriveInfo, di.GetRootDrive(), true);
                     break;
                 case PathType.Schema:
-                    IDatabaseSchemaInfo schema = di.GetSchema(schemaName);
+                    IDatabaseSchemaInfo schema = di.GetSchema(pathDescriptor.SchemaName);
                     WriteVerbose("GetItem: -> Schema");
                     WriteItemObject(schema, path, true);
                     break;
-                case PathType.Table:
-                    IDatabaseTableInfo table = di.GetTable(schemaName, tableName);
-                    WriteVerbose("GetItem: -> Table");
-                    WriteItemObject(table, path, true);
+                case PathType.ObjectType:
+                    WriteVerbose("GetItem: -> ObjectType");
+                    WriteItemObject(pathDescriptor.DatabaseObjectType, path, true);
+                    break;
+                case PathType.Object:
+                    switch (pathDescriptor.DatabaseObjectType)
+                    {
+                        case ObjectType.TABLE:
+                            {
+                                IDatabaseTableInfo table = di.GetTable(pathDescriptor.SchemaName, pathDescriptor.ObjectPath[0]);
+                                WriteVerbose("GetItem: -> Object - Table");
+                                WriteItemObject(table, path, true);
+                                break;
+                            }
+                        case ObjectType.VIEW:
+                            {
+                                IDatabaseViewInfo table = di.GetView(pathDescriptor.SchemaName, pathDescriptor.ObjectPath[0]);
+                                WriteVerbose("GetItem: -> Object - View");
+                                WriteItemObject(table, path, true);
+                                break;
+                            }
+                        default:
+                            ThrowTerminatingInvalidPathException(path);
+                            break;
+                    }
                     break;
                 case PathType.Row:
-                    PSObject row = di.GetRow(schemaName, tableName, key);
                     WriteVerbose("GetItem: -> Row");
-                    WriteItemObject(row, path, false);
+                    /// WriteItemObject(row, path, false);
                     break;
                 default:
                     ThrowTerminatingInvalidPathException(path);
@@ -156,36 +173,6 @@ namespace PowerShellDBDrive
         }
 
         /// <summary> 
-        /// Ensures that the drive is removed from the specified path. 
-        /// </summary> 
-        /// <param name="path">Path from which drive needs to be removed</param> 
-        /// <returns>Path with drive information removed</returns> 
-        private string StripDriveFromPath(string path)
-        {
-            WriteVerbose(string.Format("StripDriveFromPath:{0}", path));
-            if (string.IsNullOrEmpty(path))
-            {
-                return string.Empty;
-            }
-
-            string root;
-            if (this.PSDriveInfo == null)
-            {
-                root = string.Empty;
-            }
-            else
-            {
-                root = GetRootDrive();
-            }
-
-            if (path.Contains(root))
-            {
-                return path.Substring(path.IndexOf(root, StringComparison.OrdinalIgnoreCase) + root.Length);
-            }
-            return path;
-        }
-
-        /// <summary> 
         /// Test to see if the specified item exists. 
         /// </summary> 
         /// <param name="path">The path to the item to verify.</param> 
@@ -199,26 +186,37 @@ namespace PowerShellDBDrive
                 WriteVerbose("ItemExists: -> false");
                 return false;
             }
-
-            string schemaName;
-            string tableName;
-            string key;
-
-            PathType type = GetNamesFromPath(path, out schemaName, out tableName, out key);
-            switch (type)
+            PathDescriptor pathDescriptor = new PathDescriptor(path);
+            
+            switch (pathDescriptor.PathType)
             {
                 case PathType.Database:
-                    WriteVerbose("ItemExists: {PathType.Database} -> true");
-                    return true;
+                    {
+                        WriteVerbose("ItemExists: {PathType.Database} -> true");
+                        return true;
+                    }
                 case PathType.Schema:
-                    WriteVerbose("ItemExists: {PathType.Schema} -> true");
-                    return true;
-                case PathType.Table:
-                    WriteVerbose("ItemExists: {PathType.Table} -> true");
-                    return true;
+                    {
+                        bool result = di.IsSchemaExist(pathDescriptor.SchemaName);
+                        WriteVerbose(string.Format("ItemExists: {{PathType.Schema}} -> {0}", result));
+                        return result;
+                    }
+                case PathType.ObjectType:
+                    {
+                        WriteVerbose("ItemExists: {PathType.ObjectType} -> true");
+                        return true;
+                    }
+                case PathType.Object:
+                    {
+                        bool result = di.IsObjectExist(pathDescriptor.SchemaName, pathDescriptor.DatabaseObjectType, pathDescriptor.ObjectPath);
+                        WriteVerbose(string.Format("ItemExists: {{PathType.Object}} -> {0},{1}", pathDescriptor.ObjectPath, result));
+                        return result;
+                    }
                 case PathType.Row:
-                    WriteVerbose("ItemExists: {PathType.Row} -> false");
-                    return false;
+                    {
+                        WriteVerbose("ItemExists: {PathType.Row} -> false");
+                        return false;
+                    }
                 default:
                     WriteVerbose("ItemExists: {PathType.Invalid} -> false");
                     return false;
@@ -287,49 +285,54 @@ namespace PowerShellDBDrive
             {
                 return;
             }
+            PathDescriptor pathDescriptor = new PathDescriptor(path);
 
-            // Get the table name, row number, and the path type from the path. 
-            string schemaName;
-            string tableName;
-            string key;
-
-            PathType type = GetNamesFromPath(path, out schemaName, out tableName, out key);
-
-            switch (type)
+            switch (pathDescriptor.PathType)
             {
                 case PathType.Database:
                     WriteVerbose("GetChildItems: -- Database");
                     foreach (IDatabaseSchemaInfo schema in di.GetSchemas())
                     {
                         WriteVerbose(string.Format("GetChildItems: ---> Database schema '{0}'", schema.SchemaName));
-                        WriteItemObject(schema, schema.SchemaName, true);
+                        string outputPath = di.GetRootDrive() + schema.SchemaName;
+                        WriteItemObject(schema, outputPath, true);
                         if (recurse)
                         {
-                            GetChildItems(path + DatabaseUtils.PATH_SEPARATOR + schema.SchemaName, recurse);
+                            GetChildItems(outputPath, recurse);
                         }
                     }
+                    WriteVerbose("GetChildItems: -- Database Done");
                     break;
                 case PathType.Schema:
                     WriteVerbose("GetChildItems: -- Schema");
-                    foreach (IDatabaseTableInfo table in di.GetTables(schemaName))
+                    foreach (ObjectType objectType in di.GetSupportedObjectTypes(pathDescriptor.SchemaName))
+                    {
+                        string outputPath = di.GetRootDrive() + pathDescriptor.SchemaName + DatabaseUtils.PATH_SEPARATOR + objectType;
+                        WriteItemObject(objectType, outputPath, false);
+                    }
+                    WriteVerbose("GetChildItems: -- Schema Done");
+                    break;
+                case PathType.ObjectType:
+                    WriteVerbose("GetChildItems: -- ObjectType");
+                    foreach (IDatabaseTableInfo table in di.GetTables(pathDescriptor.SchemaName))
                     {
                         WriteVerbose(string.Format("GetChildItems: ---> Database table '{0}'", table.TableName));
-                        WriteItemObject(table, table.TableName, true);
+                        string outputPath = di.GetRootDrive() + pathDescriptor.SchemaName + DatabaseUtils.PATH_SEPARATOR + pathDescriptor.DatabaseObjectType + DatabaseUtils.PATH_SEPARATOR + table.TableName;
+                        WriteItemObject(table, outputPath, true);
                         if (recurse)
                         {
-                            GetChildItems(path + DatabaseUtils.PATH_SEPARATOR + table.TableName, recurse);
+                            GetChildItems(outputPath, recurse);
                         }
                     }
+                    WriteVerbose("GetChildItems: -- ObjectType Done");
                     break;
-                case PathType.Table:
+                case PathType.Object:
                     WriteVerbose("GetChildItems: -- Table");
-                    foreach (PSObject row in di.GetRows(schemaName, tableName))
+                    foreach (PSObject row in di.GetRows(pathDescriptor.SchemaName, pathDescriptor.ObjectPath[0]))
                     {
-						WriteItemObject(row, path, false);
+                        WriteItemObject(row, path, false);
                     }
-                    break;
-                case PathType.Row:
-
+                    WriteVerbose("GetChildItems: -- Table Done");
                     break;
                 default:
                     ThrowTerminatingInvalidPathException(path);
@@ -351,28 +354,36 @@ namespace PowerShellDBDrive
                 return;
             }
 
-            // Get type, table name and row number from the path. 
-            string schemaName;
-            string tableName;
-            string key;
+            PathDescriptor pathDescriptor = new PathDescriptor(path);
 
-            PathType type = GetNamesFromPath(path, out schemaName, out tableName, out key);
-            switch (type)
+            switch (pathDescriptor.PathType)
             {
                 case PathType.Database:
-                    foreach (IDatabaseSchemaInfo schema in di.GetSchemas())
                     {
-                        WriteItemObject(schema.SchemaName, path, true);
+                        foreach (IDatabaseSchemaInfo schema in di.GetSchemas())
+                        {
+                            WriteItemObject(schema.SchemaName, path, true);
+                        }
+                        break;
                     }
-                    break;
                 case PathType.Schema:
-                    foreach (IDatabaseTableInfo table in di.GetTables(schemaName))
                     {
-                        WriteItemObject(table.TableName, path, true);
+                        foreach (IDatabaseTableInfo table in di.GetTables(pathDescriptor.SchemaName))
+                        {
+                            WriteItemObject(table.TableName, path, true);
+                        }
+                        break;
                     }
-                    break;
-                case PathType.Table:
-                    foreach (PSObject row in di.GetRows(schemaName, tableName))
+                case PathType.ObjectType:
+                    {
+                        foreach (ObjectType objectType in di.GetSupportedObjectTypes(pathDescriptor.SchemaName))
+                        {
+                            WriteItemObject(objectType.GetTypeCode(), path, true);
+                        }
+                        break;
+                    }
+                case PathType.Object:
+                    foreach (PSObject row in di.GetRows(pathDescriptor.SchemaName, pathDescriptor.ObjectPath[0]))
                     {
                         /// TODO WriteItemObject(row.Properties[], path, false); 
                     }
@@ -395,7 +406,18 @@ namespace PowerShellDBDrive
         protected override bool HasChildItems(string path)
         {
             WriteVerbose(string.Format("HasChildItems: <- Path='{0}'", path));
-            return DatabaseUtils.ChunkPath(GetRootDrive(), path).Length < 3;
+            PathDescriptor pathDescriptor = new PathDescriptor(path);
+            switch(pathDescriptor.PathType)
+            {
+                case PathType.Root:
+                case PathType.Database:
+                case PathType.Schema:
+                case PathType.ObjectType:
+                    return true;
+                case PathType.Object:
+                    return true;
+            }
+            return false;
         }
 
         #endregion Container Methods
@@ -411,13 +433,10 @@ namespace PowerShellDBDrive
         protected override bool IsItemContainer(string path)
         {
             WriteVerbose(string.Format("IsItemContainer: <- Path='{0}'", path));
-            string schemaName;
-            string tableName;
-            string key;
-            PathType type = GetNamesFromPath(path, out schemaName, out tableName, out key);
-            if (type == PathType.Row || type == PathType.Invalid)
+            PathDescriptor pathDescriptor = new PathDescriptor(path);
+            if (pathDescriptor.PathType == PathType.Row)
             {
-                WriteVerbose("IsItemContainer: -> (PathType.Row / PathType.Invalid) false");
+                WriteVerbose("IsItemContainer: -> false");
                 return false;
             }
             WriteVerbose("IsItemContainer: -> true");
@@ -436,25 +455,26 @@ namespace PowerShellDBDrive
         protected override string GetChildName(string path)
         {
             WriteVerbose(string.Format("GetChildName: <- Path='{0}'", path));
-            string schemaName;
-            string tableName;
-            string key;
 
-            PathType type = GetNamesFromPath(path, out schemaName, out tableName, out key);
-            switch (type)
+            PathDescriptor pathDescription = new PathDescriptor(path);
+
+            switch (pathDescription.PathType)
             {
                 case PathType.Database:
-					WriteVerbose(string.Format("GetChildName: -> {{Database}} Name='{0}'", path));
+                    WriteVerbose(string.Format("GetChildName: -> {{Database}} Name='{0}'", path));
                     return path;
                 case PathType.Schema:
-					WriteVerbose(string.Format("GetChildName: -> {{Schema}} Name='{0}'", schemaName));
-                    return schemaName;
-                case PathType.Table:
-					WriteVerbose(string.Format("GetChildName: -> {{Table}} Name='{0}'", tableName));
-                    return tableName;
+                    WriteVerbose(string.Format("GetChildName: -> {{Schema}} Name='{0}'", pathDescription.SchemaName));
+                    return pathDescription.SchemaName;
+                case PathType.ObjectType:
+                    WriteVerbose(string.Format("GetChildName: -> {{DatabaseObjectType}} Name='{0}'", pathDescription.DatabaseObjectType));
+                    return pathDescription.DatabaseObjectType.ToString();
+                case PathType.Object:
+                    WriteVerbose(string.Format("GetChildName: -> {{Object}} Name='{0}'", pathDescription.ObjectPath[0]));
+                    return pathDescription.ObjectPath[0];
                 case PathType.Row:
-					WriteVerbose(string.Format("GetChildName: -> {{Row}} Name='{0}'", key));
-                    return key;
+                    /// WriteVerbose(string.Format("GetChildName: -> {{Row}} Name='{0}'", key));
+                    /// return key;
                 default:
                     ThrowTerminatingInvalidPathException(path);
                     break;
@@ -483,19 +503,35 @@ namespace PowerShellDBDrive
             // If the root is specified then the path has to contain 
             // the root. If not nothing should be returned.
             WriteVerbose(string.Format("GetParentPath: <- Path='{0}', Root='{1}'", path, root));
-			if (!String.IsNullOrEmpty(root)) 
-			{ 
-				if (!path.Contains(root)) 
-				{ 
-					return null; 
-				} 
-			} 
-			if (!path.Contains(DatabaseUtils.PATH_SEPARATOR)) {
-				return root;
-			}
-		 
-			string result = path.Substring(0, path.LastIndexOf(DatabaseUtils.PATH_SEPARATOR, StringComparison.OrdinalIgnoreCase)); 
-			WriteVerbose(string.Format("GetParentPath: -> '{0}'", result));
+
+            DatabaseDriveInfo di = PSDriveInfo as DatabaseDriveInfo;
+            if (di == null)
+            {
+                return null;
+            }
+
+            if (path.Equals(di.GetRootDrive()))
+            {
+                return string.Empty;
+            }
+
+            path = path.Replace(di.GetRootDrive(), string.Empty);
+            if (!string.IsNullOrEmpty(root))
+            {
+                if (!path.Contains(root))
+                {
+                    WriteVerbose(string.Format("GetParentPath: -> '{0}'", root));
+                    return root;
+                }
+            }
+            if (!path.Contains(DatabaseUtils.PATH_SEPARATOR))
+            {
+                WriteVerbose(string.Format("GetParentPath: -> '{0}'", di.GetRootDrive()));
+                return di.GetRootDrive();
+            }
+
+            string result = path.Substring(0, path.LastIndexOf(DatabaseUtils.PATH_SEPARATOR, StringComparison.OrdinalIgnoreCase));
+            WriteVerbose(string.Format("GetParentPath: -> '{0}'", result));
             return result;
         }
 
@@ -520,11 +556,14 @@ namespace PowerShellDBDrive
         protected override string NormalizeRelativePath(string path, string basepath)
         {
             WriteVerbose(string.Format("NormalizeRelativePath: <- Path='{0}', Basepath='{1}'", path, basepath));
+
+            DatabaseDriveInfo di = PSDriveInfo as DatabaseDriveInfo;
+
             // Normalize the paths first. 
             string normalPath = DatabaseUtils.NormalizePath(path);
-            normalPath = DatabaseUtils.RemoveDriveFromPath(normalPath, GetRootDrive());
+            normalPath = DatabaseUtils.RemoveDriveFromPath(normalPath, di.GetRootDrive());
             string normalBasePath = DatabaseUtils.NormalizePath(basepath);
-            normalBasePath = DatabaseUtils.RemoveDriveFromPath(normalBasePath, GetRootDrive());
+            normalBasePath = DatabaseUtils.RemoveDriveFromPath(normalBasePath, di.GetRootDrive());
 
             if (string.IsNullOrEmpty(normalBasePath))
             {
@@ -557,150 +596,72 @@ namespace PowerShellDBDrive
         protected override string MakePath(string parent, string child)
         {
             WriteVerbose(string.Format("MakePath: <- Parent='{0}', Child='{1}'", parent, child));
+            DatabaseDriveInfo di = PSDriveInfo as DatabaseDriveInfo;
             string result;
             string normalParent = DatabaseUtils.NormalizePath(parent);
-            normalParent = DatabaseUtils.RemoveDriveFromPath(normalParent, GetRootDrive());
-			if (normalParent.EndsWith(DatabaseUtils.PATH_SEPARATOR)) {
-				normalParent = normalParent.Remove(normalParent.Length - 1);
-			}
-            string normalChild = DatabaseUtils.NormalizePath(child);
-			if (normalChild.StartsWith(DatabaseUtils.PATH_SEPARATOR)) {
-				normalChild = normalChild.Substring(1);
-			}
-            normalChild = DatabaseUtils.RemoveDriveFromPath(normalChild, GetRootDrive());
 
+            if (normalParent.EndsWith(DatabaseUtils.PATH_SEPARATOR))
+            {
+                normalParent = normalParent.Remove(normalParent.Length - 1);
+            }
+            string normalChild = DatabaseUtils.NormalizePath(child);
+            if (normalChild.StartsWith(DatabaseUtils.PATH_SEPARATOR))
+            {
+                normalChild = normalChild.Substring(1);
+            }
+            
             if (String.IsNullOrEmpty(normalParent))
             {
-				if (String.IsNullOrEmpty(normalChild)) 
-				{
-					result = String.Empty;
-				} else {
-					result = normalChild;
-				}
-            } 
-			else 
-			{
-				if (String.IsNullOrEmpty(normalChild)) {
-					result = normalParent + DatabaseUtils.PATH_SEPARATOR;
-				} else {
-					result = normalParent + DatabaseUtils.PATH_SEPARATOR + normalChild;
-				}
+                if (String.IsNullOrEmpty(normalChild))
+                {
+                    result = String.Empty;
+                }
+                else
+                {
+                    result = normalChild;
+                }
+            }
+            else
+            {
+                if (String.IsNullOrEmpty(normalChild))
+                {
+                    result = normalParent + DatabaseUtils.PATH_SEPARATOR;
+                }
+                else
+                {
+                    result = normalParent + DatabaseUtils.PATH_SEPARATOR + normalChild;
+                }
             }
             WriteVerbose(string.Format("MakePath: -> {0}", result));
             return result;
         }
 
         #endregion Navigation Methods
-		
-		#region Provider Capabilities 
-		
-		protected override string[] ExpandPath(string path)
-		{
-			WriteVerbose(string.Format("ExpandPath: <- {0}", path));
-			DatabaseDriveInfo di = PSDriveInfo as DatabaseDriveInfo;
-			if (di == null) {
-				return null;
-			}
-			return di.GetSchemasNames(path).ToArray();
-			//string schemaName;
-            //string tableName;
-            //string key;
 
-            //PathType type = GetNamesFromPath(path, out schemaName, out tableName, out key);
-			
-			//switch(type) {
-				//case PathType.Database : 
-					//return di.GetSchemasNames("").ToArray();
-				//case PathType.Schema : 
-					//return di.GetSchemasNames(schemaName).ToArray();
-				//case PathType.Table : 
-					//return di.GetTablesNames(tableName).ToArray();
-				//default : 
-					//return null;
-			//}
-		}
-		
-		#endregion Provider Capabilities
-		
-        /// <summary> 
-        /// Returns the schena, table/view name and the row number from the path. 
-        /// </summary> 
-        /// <param name="path">Path to investigate.</param> 
-        /// <param name="schemaName">Name of the schema as represented in the  
-        /// path.</param>
-        /// <param name="tableName">Name of the table as represented in the  
-        /// path.</param> 
-        /// <param name="key">Primary key value obtained from the path.</param> 
-        /// <returns>What the path represents</returns> 
-        private PathType GetNamesFromPath(string path, out string schemaName, out string tableName, out string key)
+        #region Provider Capabilities 
+
+        protected override string[] ExpandPath(string path)
         {
-            WriteVerbose(string.Format("GetNamesFromPath: <- '{0}' , '{1}'", GetRootDrive(), path));
-            PathType retVal = PathType.Invalid;
-            key = null;
-            tableName = null;
-            schemaName = null;
-            // Check to see if the path is a drive. 
-            if (DatabaseUtils.PathIsDrive(GetRootDrive(), path))
+            DatabaseDriveInfo di = PSDriveInfo as DatabaseDriveInfo;
+            if (di == null)
             {
-				WriteVerbose(string.Format("GetNamesFromPath: -> '{0}'", PathType.Database));
-                return PathType.Database;
+                return null;
             }
-            // Separate the path into parts. 
-            string[] pathChunks = DatabaseUtils.ChunkPath(GetRootDrive(), path);
-            switch (pathChunks.Length)
+
+            PathDescriptor pathDescriptor = new PathDescriptor(path);
+            switch (pathDescriptor.PathType)
             {
-                case 3:
-                    {
-                        key = pathChunks[2];
-                        retVal = PathType.Row;
-                        goto case 2;
-                    }
-                case 2:
-                    {
-                        string name = pathChunks[1];
-                        if (!TableNameIsValid(name))
-                        {
-                            return PathType.Invalid;
-                        }
-                        tableName = name;
-                        retVal = retVal == PathType.Invalid ? PathType.Table : retVal;
-                        goto case 1;
-                    }
-                case 1:
-                    {
-                        string name = pathChunks[0];
-                        if (!SchemaNameIsValid(name))
-                        {
-                            return PathType.Invalid;
-                        }
-                        schemaName = name;
-                        retVal = retVal == PathType.Invalid ? PathType.Schema : retVal;
-                        break;
-                    }
-                default:
-                    {
-                        WriteError(new ErrorRecord(
-                            new ArgumentException("The path supplied has too many segments"),
-                                "PathNotValid",
-                                    ErrorCategory.InvalidArgument,
-                                    path));
-                        break;
-                    }
+                case PathType.Database:
+                    return di.GetSchemasNames(path).ToArray();
             }
-			WriteVerbose(string.Format("GetNamesFromPath: -> '{0}'", retVal));
-            return retVal;
+            return null;
         }
 
+        #endregion Provider Capabilities
+        
         private void ThrowTerminatingInvalidPathException(string path)
         {
             throw new ArgumentException(string.Format("Path must represent either a table or a row : {0}", path));
         }
-		
-		private string GetRootDrive() {
-			if (string.IsNullOrEmpty(PSDriveInfo.Root)) {
-				return PSDriveInfo.Name + ":" + DatabaseUtils.PATH_SEPARATOR;
-			}
-			return PSDriveInfo.Name + ":" + DatabaseUtils.PATH_SEPARATOR + PSDriveInfo.Root + DatabaseUtils.PATH_SEPARATOR;
-		}
     }
 }

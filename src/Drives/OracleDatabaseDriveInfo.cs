@@ -16,7 +16,11 @@ namespace PowerShellDBDrive.Drives
     {
         #region SQL Queries
         private const string SELECT_SCHEMAS = "SELECT USER_ID, USERNAME, CREATED FROM ALL_USERS";
-		
+
+        private const string SELECT_SCHEMA = "SELECT USER_ID, USERNAME, CREATED FROM ALL_USERS WHERE USERNAME = :schemaname";
+
+        private const string SELECT_SCHEMA_EXISTS = "SELECT 1 FROM ALL_USERS WHERE USERNAME = :schemaname";
+
         private const string SELECT_SCHEMAS_NAMES = "SELECT USERNAME FROM ALL_USERS";
 		
 		private const string SELECT_SCHEMAS_NAMES_REGEXP = "SELECT USERNAME FROM ALL_USERS WHERE REGEXP_LIKE(USERNAME, :regexp)";
@@ -78,7 +82,7 @@ namespace PowerShellDBDrive.Drives
 	READ_ONLY ,
 	SEGMENT_CREATED ,
 	RESULT_CACHE
-FROM ALL_TABLES WHERE OWNER = :schemaname ";
+FROM ALL_TABLES WHERE OWNER = :schemaname";
 
 private const string SELECT_SINGLE_TABLE =
 @"SELECT 
@@ -176,7 +180,9 @@ FROM ALL_TAB_COLUMNS WHERE OWNER = :schemaname AND TABLE_NAME = :tablename";
 		private const string SELECT_TABLES_NAMES = "SELECT TABLE_NAME FROM ALL_TABLES WHERE OWNER = :schemaname ";
 		
 		private const string SELECT_TABLES_NAMES_REGEXP = "SELECT TABLE_NAME FROM ALL_TABLES WHERE OWNER = :schemaname AND REGEXP_LIKE(TABLE_NAME, :regexp)";
-		
+
+        private const string SELECT_TABLE_EXISTS = "SELECT 1 FROM ALL_TABLES WHERE OWNER = :schemaname AND REGEXP_LIKE(TABLE_NAME, :regexp)";
+
         #endregion SQL Queries
 
         public OracleDatabaseDriveInfo(PSDriveInfo driveInfo, DatabaseParameters parameters) : base(driveInfo, parameters)
@@ -254,7 +260,57 @@ FROM ALL_TAB_COLUMNS WHERE OWNER = :schemaname AND TABLE_NAME = :tablename";
 
         public override IDatabaseSchemaInfo GetSchema(string schemaName)
         {
-            return (from s in GetSchemas() where string.Equals(s.SchemaName, schemaName, StringComparison.CurrentCultureIgnoreCase) select s).FirstOrDefault();
+            using (DbConnection connection = GetConnection())
+            {
+                connection.Open();
+                using (DbCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = SELECT_SCHEMA;
+                    command.CommandTimeout = Timeout;
+                    command.CommandType = CommandType.Text;
+                    DbParameter parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "schemaname";
+                    parameter.Value = schemaName;
+                    command.Parameters.Add(parameter);
+                    using (DbDataReader reader = command.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            return new OracleDatabaseSchemaInfo((long)reader.GetInt64(reader.GetOrdinal("USER_ID")), reader.GetString(reader.GetOrdinal("USERNAME")), reader.GetDateTime(reader.GetOrdinal("CREATED")));
+                        }
+                    }
+                }
+                return null;
+            }
+        }
+        
+        public override IEnumerable<ObjectType> GetSupportedObjectTypes(string schemaName)
+        {
+            foreach (ObjectType ot in Enum.GetValues(typeof(ObjectType)))
+            {
+                yield return ot;
+            }
+        }
+
+        public override IEnumerable<IDatabaseViewInfo> GetViews(string schemaName)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override IEnumerable<string> GetViewsNames(string schemaName)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override IEnumerable<string> GetViewsNames(string schemaName, string viewName)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override IDatabaseViewInfo GetView(string schemaName, string viewName)
+        {
+            throw new NotImplementedException();
         }
 
         public override IEnumerable<IDatabaseTableInfo> GetTables(string schemaName)
@@ -443,6 +499,76 @@ FROM ALL_TAB_COLUMNS WHERE OWNER = :schemaname AND TABLE_NAME = :tablename";
                 }
             }
         }
+        
+        public override bool IsSchemaExist(string schemaName)
+        {
+            using (DbConnection connection = GetConnection())
+            {
+                connection.Open();
+                using (DbCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = SELECT_SCHEMA_EXISTS;
+                    command.CommandTimeout = Timeout;
+                    command.CommandType = CommandType.Text;
+                    DbParameter parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "schemaname";
+                    parameter.Value = schemaName;
+                    command.Parameters.Add(parameter);
+                    using (DbDataReader reader = command.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+        }
+
+        public override bool IsObjectExist(string schemaName, ObjectType objectType, string[] objectPath)
+        {
+            if (objectType == ObjectType.TABLE) {
+                return IsTableExist(schemaName, objectPath[0]);
+            }
+            return false;
+        }
+
+        private bool IsTableExist(string schemaName, string tableName)
+        {
+            using (DbConnection connection = GetConnection())
+            {
+                connection.Open();
+                using (DbCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = SELECT_SINGLE_TABLE;
+                    command.CommandTimeout = Timeout;
+                    command.CommandType = CommandType.Text;
+
+                    DbParameter parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "schemaname";
+                    parameter.Value = schemaName;
+                    command.Parameters.Add(parameter);
+
+                    parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "tablename";
+                    parameter.Value = tableName;
+                    command.Parameters.Add(parameter);
+
+                    using (DbDataReader reader = command.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            return true;
+                        }
+                        return false;
+                    }
+                }
+            }
+        }
 
         #region Utility Methods 
 
@@ -544,6 +670,7 @@ FROM ALL_TAB_COLUMNS WHERE OWNER = :schemaname AND TABLE_NAME = :tablename";
             dci.Histogram = reader["HISTOGRAM"] as string;
             return dci;
         }
+
         #endregion Utility Methods
     }
 }

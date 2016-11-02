@@ -1,21 +1,24 @@
 using System;
 using System.Text.RegularExpressions;
 using System.Management.Automation;
-using System.Data.Common;
+using System.Linq;
 
 namespace PowerShellDBDrive {
 	
 	/// <summary> 
 	/// Defines the types of paths to items. 
-	/// {Database}/{Schema}/{Table}/{Row}
+	/// {Root}/{Database}/{Schema}/{ObjectType}/{Table|View}/{Row}
 	/// </summary>
 	public enum PathType 
 	{ 
+		/// Logical Root of database.
+		Root,
+		
 		/// <summary>
 		/// Path to a database.
 		/// Mostly will be the root for database.
 		/// </summary>
-		Database, 
+		Database,
 		
 		/// <summary>
 		/// Path to a schema.
@@ -23,9 +26,14 @@ namespace PowerShellDBDrive {
 		Schema,
 		
 		/// <summary>
-		/// Path to a table item.
+		/// Path to object types availables.
 		/// </summary>
-		Table,
+		ObjectType,
+		
+		/// <summary>
+		/// Path to an object item. (Can be a table, view, etc...)
+		/// </summary>
+		Object,
 		
 		/// <summary>
 		/// Path to a row item.
@@ -38,17 +46,113 @@ namespace PowerShellDBDrive {
 		Invalid 
 	}
 	
+	/// <summary> 
+	/// Define supported Object Types
+	/// </summary>
+	public enum ObjectType {
+		///<summary>
+		///Table object type
+		///</summary>
+		TABLE, 
+		///<summary>
+		///View object type
+		///</summary>
+		VIEW
+	}
+
+    /// <summary>
+    /// A Path descriptor.
+    /// </summary>
+    public class PathDescriptor
+    {
+        /// <summary>
+        /// Create a path descriptor from a full path (not partial)
+        /// </summary>
+        /// <param name="path">the full path with drive name</param>
+        public PathDescriptor (string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                this.PathType = PathType.Database;
+            }
+            else
+            {
+                Match matcher = DatabaseUtils.PATH_VALIDATOR.Match(path);
+                if (!matcher.Success)
+                {
+                    throw new ArgumentException(string.Format("Path does not match regular expression : {0}", path), "Path");
+                }
+                /// Capturing groups follows
+                Group group = matcher.Groups["PathElement"];
+                CaptureCollection captureCollection = group.Captures;
+                
+                int count = captureCollection.Count;
+                
+                if (count == 0)
+                {
+                    this.PathType = PathType.Database;
+                }
+                if (count > 0)
+                {
+                    this.SchemaName = captureCollection[0].Value;
+                    this.PathType = PathType.Schema;
+                }
+                if (count > 1)
+                {
+                    this.DatabaseObjectType = DatabaseUtils.ParseEnum<ObjectType>(captureCollection[1].Value);
+                    this.PathType = PathType.ObjectType;
+                }
+                if (count > 2)
+                {
+                    this.PathType = PathType.Object;
+                    this.ObjectPath = new string[count - 2];
+                    for (int j = 0; j < count - 2; j++ )
+                    {
+                        this.ObjectPath[j] = captureCollection[2 + j].Value;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Path type 
+        /// </summary>
+        public PathType PathType { get; set; }
+
+        /// <summary>
+        /// The current database connected to.
+        /// </summary>
+        public string Database { get; set; }
+
+        /// <summary>
+        /// The Schema Name
+        /// </summary>
+        public string SchemaName { get; set; }
+
+        /// <summary>
+        /// The Object Type.
+        /// </summary>
+        public ObjectType DatabaseObjectType { get; set; }
+
+        /// <summary>
+        /// The object path from object type.
+        /// </summary>
+        public string[] ObjectPath { get; set; }
+    }
+	
 	public static class DatabaseUtils
     {
 		/// <summary>
-		/// Characters used to valid names.
-		/// </summary> 
-		public const string VALIDATION_PATTERN = @"^[a-zA-Z0-9_]+$"; 
-		 
-		/// <summary> 
-		/// The valid path separator character. 
-		/// </summary>
-		public const string PATH_SEPARATOR = "\\";
+        /// Generic Matcher for path. (should match anything that is alpha numeric with underscore separated with single path separators) (DATABASE is OK, DATABASE\SCHEMA\TABLENAME\ should be OK too.
+        /// </summary>
+        public static readonly Regex PATH_VALIDATOR = new Regex(@"^([a-z0-9_]+:\\)?((?<PathElement>[a-z0-9_]+)\\?)*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        public static readonly Regex NAME_VALIDATOR = new Regex(@"^[a-z0-9_]+$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        /// <summary> 
+        /// The valid path separator character. 
+        /// </summary>
+        public const string PATH_SEPARATOR = "\\";
 		
 		/// <summary>
 		/// Select string to be used
@@ -62,8 +166,7 @@ namespace PowerShellDBDrive {
 		/// <remarks>Helps to check for SQL injection attacks</remarks> 
 		/// <returns>A Boolean value indicating true if the name is valid.</returns> 
 		public static bool NameIsValid(string databaseObject) {
-			Regex exp = new Regex(VALIDATION_PATTERN, RegexOptions.Compiled | RegexOptions.IgnoreCase); 
-			if (exp.IsMatch(databaseObject)) { 
+			if (NAME_VALIDATOR.IsMatch(databaseObject)) { 
 				return true;
 			}
 			return false; 
@@ -77,13 +180,24 @@ namespace PowerShellDBDrive {
 		public static string GetSelectStringForTable(string tableName) {
 			return String.Format(SELECT_STRING_FORMAT, tableName);
 		}
-		
-		/// <summary> 
-		/// Ensures that the drive is removed from the specified path. 
-		/// </summary> 
-		/// <param name="path">Path from which drive needs to be removed</param> 
-		/// <returns>Path with drive information removed</returns> 
-		public static string RemoveDriveFromPath(string path, string root) 
+
+        /// <summary>
+        /// Parse an string to given enum.
+        /// </summary>
+        /// <typeparam name="T">type of enum</typeparam>
+        /// <param name="value">string value of enum</param>
+        /// <returns>the enum type</returns>
+        public static T ParseEnum<T>(string value)
+        {
+            return (T)Enum.Parse(typeof(T), value, true);
+        }
+
+        /// <summary> 
+        /// Ensures that the drive is removed from the specified path. 
+        /// </summary> 
+        /// <param name="path">Path from which drive needs to be removed</param> 
+        /// <returns>Path with drive information removed</returns> 
+        public static string RemoveDriveFromPath(string path, string root) 
 		{ 
 			string result = path;
 			if (result == null) 
@@ -143,8 +257,8 @@ namespace PowerShellDBDrive {
 			// Remove the drive name and first path separator.  If the
 			// path is reduced to nothing, it is a drive. Also if it is
 			// just a drive then there will not be any path separators.
-			if (String.IsNullOrEmpty(path.Replace(root, string.Empty)) || 
-				String.IsNullOrEmpty(path.Replace(root + DatabaseUtils.PATH_SEPARATOR, string.Empty))) {
+			if (string.IsNullOrEmpty(path.Replace(root, string.Empty)) || 
+				string.IsNullOrEmpty(path.Replace(root + DatabaseUtils.PATH_SEPARATOR, string.Empty))) {
 				return true;
 			} else {
 				return false;
@@ -163,7 +277,7 @@ namespace PowerShellDBDrive {
 			currentInstance = new PSObject();
 		}
 		
-		public void AddField(String fieldName, Object fieldValue, Type type) {
+		public void AddField(string fieldName, Object fieldValue, Type type) {
 			System.TypeCode typeCode = Type.GetTypeCode(type);
 			switch(typeCode) {
 				case TypeCode.Boolean : 
@@ -179,19 +293,19 @@ namespace PowerShellDBDrive {
 			}
 		}
 		
-		public void AddField(String fieldName, String fieldValue) {
+		public void AddField(string fieldName, string fieldValue) {
 			currentInstance.Members.Add(new PSNoteProperty(fieldName, fieldValue));
 		}
 		
-		public void AddField(String fieldName, bool fieldValue) {
+		public void AddField(string fieldName, bool fieldValue) {
 			currentInstance.Members.Add(new PSNoteProperty(fieldName, fieldValue));
 		}
 		
-		public void AddField(String fieldName, int fieldValue) {
+		public void AddField(string fieldName, int fieldValue) {
 			currentInstance.Members.Add(new PSNoteProperty(fieldName, fieldValue));
 		}
 		
-		public void AddField(String fieldName, double fieldValue) {
+		public void AddField(string fieldName, double fieldValue) {
 			currentInstance.Members.Add(new PSNoteProperty(fieldName, fieldValue));
 		}
 		
