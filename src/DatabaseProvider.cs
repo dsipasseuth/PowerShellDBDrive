@@ -7,7 +7,7 @@ using PowerShellDBDrive.DataModel;
 
 namespace PowerShellDBDrive
 {
-    [CmdletProvider("DatabaseProvider", ProviderCapabilities.ExpandWildcards)]
+    [CmdletProvider("DatabaseProvider", ProviderCapabilities.None)]
     public class DatabaseProvider : NavigationCmdletProvider
     {
         /// <summary> 
@@ -160,16 +160,7 @@ namespace PowerShellDBDrive
             {
                 return false;
             }
-            path = DatabaseUtils.NormalizePath(path);
-            string[] pathElements = path.Split(DatabaseUtils.PATH_SEPARATOR.ToCharArray());
-            foreach (string element in pathElements)
-            {
-                if (element.Length == 0)
-                {
-                    return false;
-                }
-            }
-            return true;
+            return DatabaseUtils.PATH_VALIDATOR.IsMatch(path);
         }
 
         /// <summary> 
@@ -186,6 +177,7 @@ namespace PowerShellDBDrive
                 WriteVerbose("ItemExists: -> false");
                 return false;
             }
+
             PathDescriptor pathDescriptor = new PathDescriptor(path);
             
             switch (pathDescriptor.PathType)
@@ -452,9 +444,11 @@ namespace PowerShellDBDrive
         /// <returns> 
         /// The leaf element in the path. 
         /// </returns> 
-        protected override string GetChildName(string path)
+        /*protected override string GetChildName(string path)
         {
             WriteVerbose(string.Format("GetChildName: <- Path='{0}'", path));
+
+            path = path.Replace("*", string.Empty);
 
             PathDescriptor pathDescription = new PathDescriptor(path);
 
@@ -480,7 +474,7 @@ namespace PowerShellDBDrive
                     break;
             }
             return null;
-        }
+        }*/
 
         /// <summary> 
         /// Returns the parent portion of the path, removing the child  
@@ -640,22 +634,26 @@ namespace PowerShellDBDrive
 
         #region Provider Capabilities 
 
-        protected override string[] ExpandPath(string path)
+        /**protected override string[] ExpandPath(string path)
         {
             DatabaseDriveInfo di = PSDriveInfo as DatabaseDriveInfo;
             if (di == null)
             {
                 return null;
             }
-
+            path = path.Replace("*", string.Empty);
             PathDescriptor pathDescriptor = new PathDescriptor(path);
             switch (pathDescriptor.PathType)
             {
                 case PathType.Database:
-                    return di.GetSchemasNames(path).ToArray();
+                    return di.GetSchemasNames("").ToArray();
+                case PathType.Schema:
+                    return di.GetSchemasNames("^" + pathDescriptor.SchemaName + ".*").ToArray();
+                case PathType.Object:
+                    return di.GetTablesNames("^" + pathDescriptor.ObjectPath[0] + ".*").ToArray();
             }
             return null;
-        }
+        }*/
 
         #endregion Provider Capabilities
         

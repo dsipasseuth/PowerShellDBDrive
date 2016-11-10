@@ -85,7 +85,8 @@ namespace PowerShellDBDrive {
                 Match matcher = DatabaseUtils.PATH_VALIDATOR.Match(path);
                 if (!matcher.Success)
                 {
-                    throw new ArgumentException(string.Format("Path does not match regular expression : {0}", path), "Path");
+                    this.PathType = PathType.Invalid;
+                    return;
                 }
                 /// Capturing groups follows
                 Group group = matcher.Groups["PathElement"];
@@ -150,7 +151,7 @@ namespace PowerShellDBDrive {
 		/// <summary>
         /// Generic Matcher for path. (should match anything that is alpha numeric with underscore separated with single path separators) (DATABASE is OK, DATABASE\SCHEMA\TABLENAME\ should be OK too.
         /// </summary>
-        public static readonly Regex PATH_VALIDATOR = new Regex(@"^([a-z0-9_]+:\\)?((?<PathElement>[a-z0-9_]+)\\?)*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        public static readonly Regex PATH_VALIDATOR = new Regex(@"^([a-z0-9_]+:(\\|$))?((?<PathElement>[a-z0-9_]+)\\?)*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         public static readonly Regex NAME_VALIDATOR = new Regex(@"^[a-z0-9_]+$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
