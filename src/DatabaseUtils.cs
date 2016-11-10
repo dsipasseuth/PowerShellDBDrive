@@ -2,6 +2,11 @@ using System;
 using System.Text.RegularExpressions;
 using System.Management.Automation;
 using System.Linq;
+using System.Data.Common;
+using System.Collections.Generic;
+using System.Collections;
+using System.Data;
+using System.Collections.ObjectModel;
 
 namespace PowerShellDBDrive {
 	
@@ -272,6 +277,14 @@ namespace PowerShellDBDrive {
 	public class PSObjectBuilder {
 		
 		private PSObject currentInstance;
+
+		public static PSObject FromDbDataReader(DbDataReader reader) {
+			PSObjectBuilder builder = new PSObjectBuilder();
+			for( int i = 0 ; i < reader.FieldCount ; i ++)  {
+				builder.AddField(reader.GetName(i), reader.GetValue(i), reader.GetFieldType(i));
+			}
+			return builder.Build();
+		}
 		
 		public void NewInstance() {
 			currentInstance = new PSObject();
@@ -312,5 +325,121 @@ namespace PowerShellDBDrive {
 		public PSObject Build() {
 			return currentInstance;
 		}
+	}
+
+	/// <summary>
+	///	Simple Query Manager handling simple queries to a database.
+	/// <summary>
+	public class BaseQueryManager : IDisposable {
+
+		/// <summary>
+		/// Default mapping 
+		/// <summary>
+		private static readonly IReadOnlyDictionary<Type, DbType> _defaultTypeMap = new ReadOnlyDictionary<Type, DbType>(new Dictionary<Type, DbType>() {
+			{ typeof(byte),  DbType.Byte },
+			{ typeof(sbyte), DbType.SByte },
+			{ typeof(short), DbType.Int16 },
+			{ typeof(ushort), DbType.UInt16 },
+			{ typeof(int), DbType.Int32 },
+			{ typeof(uint), DbType.UInt32 },
+			{ typeof(long), DbType.Int64 },
+			{ typeof(ulong), DbType.UInt64 },
+			{ typeof(float), DbType.Single },
+			{ typeof(double), DbType.Double },
+			{ typeof(decimal), DbType.Decimal },
+			{ typeof(bool), DbType.Boolean },
+			{ typeof(string), DbType.String },
+			{ typeof(char), DbType.StringFixedLength },
+			{ typeof(Guid), DbType.Guid },
+			{ typeof(DateTime), DbType.DateTime },
+			{ typeof(DateTimeOffset), DbType.DateTimeOffset },
+			{ typeof(byte[]), DbType.Binary },
+			{ typeof(byte?), DbType.Byte },
+			{ typeof(sbyte?), DbType.SByte },
+			{ typeof(short?), DbType.Int16 },
+			{ typeof(ushort?), DbType.UInt16 },
+			{ typeof(int?), DbType.Int32 },
+			{ typeof(uint?), DbType.UInt32 },
+			{ typeof(long?), DbType.Int64 },
+			{ typeof(ulong?), DbType.UInt64 },
+			{ typeof(float?), DbType.Single },
+			{ typeof(double?), DbType.Double },
+			{ typeof(decimal?), DbType.Decimal },
+			{ typeof(bool?), DbType.Boolean },
+			{ typeof(char?), DbType.StringFixedLength },
+			{ typeof(Guid?), DbType.Guid },
+			{ typeof(DateTime?), DbType.DateTime },
+			{ typeof(DateTimeOffset?), DbType.DateTimeOffset }
+		});
+
+		private bool disposed = false;
+
+		private DbConnection CurrentConnection {get; set;}
+
+		protected IReadOnlyDictionary<Type, DbType> TypeMap { 
+			get {
+				return _defaultTypeMap;
+			}
+			private set {
+			}
+		}
+
+		public BaseQueryManager(DbConnection connection) {
+			CurrentConnection = connection;
+		}
+
+		public IEnumerable<PSObject> QueryForObjects(string query, int timeout) {
+			return QueryForObjects(query, new Dictionary<string, object>(), PSObjectBuilder.FromDbDataReader, timeout);
+		}
+
+		public IEnumerable<PSObject> QueryForObjects(string query, IDictionary<string, object> namedParameters, int timeout) {
+			return QueryForObjects(query, namedParameters, PSObjectBuilder.FromDbDataReader, timeout);
+		}
+
+		public IEnumerable<T> QueryForObjects<T>(string query, Func<DbDataReader, T> callback, int timeout) {
+            return QueryForObjects(query, new Dictionary<string, object>(), callback, timeout);
+            
+		}
+
+		public IEnumerable<T> QueryForObjects<T>(string query, IDictionary<string, object> namedParameters, Func<DbDataReader, T> callback, int timeout) {
+			CurrentConnection.Open();
+            using (DbCommand command = CurrentConnection.CreateCommand())
+            {
+                command.CommandText = query;
+                command.CommandTimeout = timeout;
+                command.CommandType = CommandType.Text;
+                foreach (var entry in namedParameters) {
+					DbParameter parameter = command.CreateParameter();
+					parameter.DbType = TypeMap[entry.Value.GetType()];
+            		parameter.ParameterName = entry.Key;
+            		parameter.Value = entry.Value;
+            		command.Parameters.Add(parameter);
+                }
+                using (DbDataReader reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        yield return callback(reader);
+                    }
+                }
+            }
+		}
+
+		#region IDisposable implementation
+		public void Dispose() {
+			Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+
+		public void Dispose(bool disposing) {
+			if (disposed) {
+				return;
+			}
+			if (disposing) {
+				CurrentConnection.Dispose();
+			}
+			disposed = true;
+		}
+		#endregion IDisposable implementation
 	}
 }

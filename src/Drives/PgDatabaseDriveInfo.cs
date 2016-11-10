@@ -18,7 +18,11 @@ namespace PowerShellDBDrive.Drives
 
 		private const string SELECT_DATABASES = "SELECT datname FROM pg_database WHERE datistemplate = false";
 
-        private const string SELECT_SCHEMAS = "select catalog_name, schema_name, schema_owner from information_schema.schemata";
+        private const string SELECT_SCHEMAS = "SELECT catalog_name, schema_owner, schema_name FROM information_schema.schemata";
+
+        private const string SELECT_SCHEMA = "SELECT catalog_name, schema_owner, schema_name FROM information_schema.schemata where schema_name = @schemaname";
+
+        private const string SELECT_SCHEMA_EXISTS = "SELECT 1 FROM information_schema.schemata WHERE schema_name = @schemaname";
 		
         private const string SELECT_TABLES =
 @"SELECT 
@@ -34,7 +38,7 @@ namespace PowerShellDBDrive.Drives
 	is_insertable_into,
 	is_typed,
 	commit_action
-FROM information_schema.tables where table_catalog = :catalog ";
+FROM information_schema.tables where table_schema = @schemaname";
 
         private const string SELECT_COLUMNS =
 @"SELECT 
@@ -82,7 +86,7 @@ FROM information_schema.tables where table_catalog = :catalog ";
 	is_generated             ,
 	generation_expression    ,
 	is_updatable             
-FROM information_schema.columns WHERE table_schema = :schemaname AND table_name = :tablename";
+FROM information_schema.columns WHERE table_schema = @schemaname AND table_name = @tablename";
 
         #endregion SQL Queries
 
@@ -105,10 +109,37 @@ FROM information_schema.columns WHERE table_schema = :schemaname AND table_name 
                     {
                         while (reader.Read())
                         {
-                            yield return new PgDatabaseSchemaInfo(reader.GetString(reader.GetOrdinal("CATALOG_NAME")), reader.GetString(reader.GetOrdinal("SCHEMA_NAME")), reader.GetString(reader.GetOrdinal("SCHEMA_OWNER")));
+                            yield return new PgDatabaseSchemaInfo(reader.GetString(reader.GetOrdinal("CATALOG_NAME")), reader.GetString(reader.GetOrdinal("SCHEMA_OWNER")), reader.GetString(reader.GetOrdinal("SCHEMA_NAME")));
                         }
                     }
                 }
+            }
+        }
+
+        public override IDatabaseSchemaInfo GetSchema(string schemaName)
+        {
+            using (DbConnection connection = GetConnection())
+            {
+                connection.Open();
+                using (DbCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = SELECT_SCHEMA;
+                    command.CommandTimeout = Timeout;
+                    command.CommandType = CommandType.Text;
+                    DbParameter parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "schemaname";
+                    parameter.Value = schemaName;
+                    command.Parameters.Add(parameter);
+                    using (DbDataReader reader = command.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            return new PgDatabaseSchemaInfo(reader.GetString(reader.GetOrdinal("CATALOG_NAME")), reader.GetString(reader.GetOrdinal("SCHEMA_OWNER")), reader.GetString(reader.GetOrdinal("SCHEMA_NAME")));
+                        }
+                    }
+                }
+                return null;
             }
         }
 
@@ -126,7 +157,7 @@ FROM information_schema.columns WHERE table_schema = :schemaname AND table_name 
                     {
                         while (reader.Read())
                         {
-                            yield return reader["USERNAME"] as string;
+                            yield return reader["SCHEMA_NAME"] as string;
                         }
                     }
                 }
@@ -135,38 +166,15 @@ FROM information_schema.columns WHERE table_schema = :schemaname AND table_name 
 		
         public override IEnumerable<String> GetSchemasNames(string regexp)
         {
-            using (DbConnection connection = GetConnection())
-            {
-                connection.Open();
-                using (DbCommand command = connection.CreateCommand())
-                {
-                    command.CommandText = SELECT_SCHEMAS;
-                    command.CommandTimeout = Timeout;
-                    command.CommandType = CommandType.Text;
-					DbParameter parameter = command.CreateParameter();
-                    parameter.DbType = DbType.String;
-                    parameter.ParameterName = "regexp";
-                    parameter.Value = "^" + regexp;
-                    command.Parameters.Add(parameter);
-                    using (DbDataReader reader = command.ExecuteReader())
-                    {
-                        while (reader.Read())
-                        {
-                            yield return reader["USERNAME"] as string;
-                        }
-                    }
-                }
-            }
-        }
-
-        public override IDatabaseSchemaInfo GetSchema(string schemaName)
-        {
-            return (from s in GetSchemas() where string.Equals(s.SchemaName, schemaName, StringComparison.CurrentCultureIgnoreCase) select s).FirstOrDefault();
+            throw new NotImplementedException();
         }
 
         public override IEnumerable<ObjectType> GetSupportedObjectTypes(string schemaName)
         {
-            throw new NotImplementedException();
+            foreach (ObjectType ot in Enum.GetValues(typeof(ObjectType)))
+            {
+                yield return ot;
+            }
         }
 
         public override IEnumerable<IDatabaseViewInfo> GetViews(string schemaName)
@@ -298,7 +306,29 @@ FROM information_schema.columns WHERE table_schema = :schemaname AND table_name 
         
         public override bool IsSchemaExist(string schemaName)
         {
-            throw new NotImplementedException();
+            using (DbConnection connection = GetConnection())
+            {
+                connection.Open();
+                using (DbCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = SELECT_SCHEMA_EXISTS;
+                    command.CommandTimeout = Timeout;
+                    command.CommandType = CommandType.Text;
+                    DbParameter parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "schemaname";
+                    parameter.Value = schemaName;
+                    command.Parameters.Add(parameter);
+                    using (DbDataReader reader = command.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
         }
 
         public override bool IsObjectExist(string schemaName, ObjectType objectType, string[] objectPath)
@@ -312,61 +342,18 @@ FROM information_schema.columns WHERE table_schema = :schemaname AND table_name 
         private PgDatabaseTableInfo BuildDatabaseTableInfo(DbDataReader reader)
         {
             PgDatabaseTableInfo dti = new PgDatabaseTableInfo();
-            /*dti.Owner = reader["OWNER"] as string;
-            dti.TableName = reader["TABLE_NAME"] as string;
-            dti.TablespaceName = reader["TABLESPACE_NAME"] as string;
-            dti.ClusterName = reader["CLUSTER_NAME"] as string;
-            dti.IotName = reader["IOT_NAME"] as string;
-            dti.Status = reader["STATUS"] as string;
-            dti.PctFree = reader["PCT_FREE"] as long?;
-            dti.PctUsed = reader["PCT_USED"] as long?;
-            dti.IniTrans = reader["INI_TRANS"] as long?;
-            dti.MaxTrans = reader["MAX_TRANS"] as long?;
-            dti.InitialExtent = reader["INITIAL_EXTENT"] as long?;
-            dti.NextExtent = reader["NEXT_EXTENT"] as long?;
-            dti.MinExtents = reader["MIN_EXTENTS"] as long?;
-            dti.MaxExtents = reader["MAX_EXTENTS"] as long?;
-            dti.PctIncrease = reader["PCT_INCREASE"] as long?;
-            dti.Freelists = reader["FREELISTS"] as long?;
-            dti.FreelistGroups = reader["FREELIST_GROUPS"] as long?;
-            dti.Logging = reader["LOGGING"] as string;
-            dti.BackedUp = reader["BACKED_UP"] as string;
-            dti.NumRows = reader["NUM_ROWS"] as long?;
-            dti.Blocks = reader["BLOCKS"] as long?;
-            dti.EmptyBlocks = reader["EMPTY_BLOCKS"] as long?;
-            dti.AvgSpace = reader["AVG_SPACE"] as long?;
-            dti.ChainCnt = reader["CHAIN_CNT"] as long?;
-            dti.AvgRowLen = reader["AVG_ROW_LEN"] as long?;
-            dti.AvgSpaceFreelistBlocks = reader["AVG_SPACE_FREELIST_BLOCKS"] as long?;
-            dti.NumFreelistBlocks = reader["NUM_FREELIST_BLOCKS"] as long?;
-            dti.Degree = reader["DEGREE"] as string;
-            dti.Instances = reader["INSTANCES"] as string;
-            dti.Cache = reader["CACHE"] as string;
-            dti.TableLock = reader["TABLE_LOCK"] as string;
-            dti.SampleSize = reader["SAMPLE_SIZE"] as long?;
-            dti.LastAnalyzed = reader["LAST_ANALYZED"] as DateTime?;
-            dti.Partitioned = reader["PARTITIONED"] as string;
-            dti.IotType = reader["IOT_TYPE"] as string;
-            dti.Temporary = reader["TEMPORARY"] as string;
-            dti.Secondary = reader["SECONDARY"] as string;
-            dti.Nested = reader["NESTED"] as string;
-            dti.BufferPool = reader["BUFFER_POOL"] as string;
-            dti.FlashCache = reader["FLASH_CACHE"] as string;
-            dti.CellFlashCache = reader["CELL_FLASH_CACHE"] as string;
-            dti.RowMovement = reader["ROW_MOVEMENT"] as string;
-            dti.GlobalStats = reader["GLOBAL_STATS"] as string;
-            dti.UserStats = reader["USER_STATS"] as string;
-            dti.Duration = reader["DURATION"] as string;
-            dti.SkipCorrupt = reader["SKIP_CORRUPT"] as string;
-            dti.Monitoring = reader["MONITORING"] as string;
-            dti.ClusterOwner = reader["CLUSTER_OWNER"] as string;
-            dti.Dependencies = reader["DEPENDENCIES"] as string;
-            dti.Compression = reader["COMPRESSION"] as string;
-            dti.CompressFor = reader["COMPRESS_FOR"] as string;
-            dti.Dropped = reader["DROPPED"] as string;
-            dti.ReadOnly = reader["READ_ONLY"] as string;
-            dti.SegmentCreated = reader["SEGMENT_CREATED"] as string;
-            dti.ResultCache = reader["RESULT_CACHE"] as string;*/
+            dti.TableCatalog = reader["table_catalog"] as string;
+            dti.TableSchema = reader["table_schema"] as string;
+            dti.TableName = reader["table_name"] as string; 
+            dti.TableType = reader["table_type"] as string;
+            dti.SelfReferencingColumnName = reader["self_referencing_column_name"] as string;
+            dti.ReferenceGeneration = reader["reference_generation"] as string;
+            dti.UserDefinedTypeCatalog = reader["user_defined_type_catalog"] as string; 
+            dti.UserDefinedTypeSchema = reader["user_defined_type_schema"] as string; 
+            dti.UserDefinedTypeName = reader["user_defined_type_name"] as string;
+            dti.IsInsertableInto = reader["is_insertable_into"] as bool?;
+            dti.IsTyped = reader["is_typed"] as bool?;
+            dti.CommitAction = reader["commit_action"] as string;
             return dti;
         }
 
