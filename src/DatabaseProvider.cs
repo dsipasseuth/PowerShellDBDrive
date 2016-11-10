@@ -7,7 +7,7 @@ using PowerShellDBDrive.DataModel;
 
 namespace PowerShellDBDrive
 {
-    [CmdletProvider("DatabaseProvider", ProviderCapabilities.ExpandWildcards)]
+    [CmdletProvider("DatabaseProvider", ProviderCapabilities.None)]
     public class DatabaseProvider : NavigationCmdletProvider
     {
         /// <summary> 
@@ -634,7 +634,7 @@ namespace PowerShellDBDrive
 
         #region Provider Capabilities 
 
-        protected override string[] ExpandPath(string path)
+        /**protected override string[] ExpandPath(string path)
         {
             DatabaseDriveInfo di = PSDriveInfo as DatabaseDriveInfo;
             if (di == null)
@@ -653,7 +653,7 @@ namespace PowerShellDBDrive
                     return di.GetTablesNames("^" + pathDescriptor.ObjectPath[0] + ".*").ToArray();
             }
             return null;
-        }
+        }*/
 
         #endregion Provider Capabilities
         
