@@ -9,6 +9,5 @@ namespace PowerShellDBDrive.DataModel
     {
         string SchemaName { get; }
         string ViewName { get; }
-        IDatabaseColumnInfo[] Columns { get; }
     }
 }
