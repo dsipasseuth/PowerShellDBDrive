@@ -163,7 +163,7 @@ namespace PowerShellDBDrive {
 		/// <summary>
 		/// Select string to be used
 		/// </summary> 
-		public const string SELECT_STRING_FORMAT = "Select * From {0}";
+		public const string SELECT_STRING_FORMAT = "Select * From {0}.{1}";
 		
 		/// <summary> 
 		/// Checks to see if the object name is valid. 
@@ -183,8 +183,8 @@ namespace PowerShellDBDrive {
 		/// </summary> 
 		/// <param name="tableName">table to query on</param> 
 		/// <returns>a new OleDbCommand without connection associated.</returns> 
-		public static string GetSelectStringForTable(string tableName) {
-			return String.Format(SELECT_STRING_FORMAT, tableName);
+		public static string GetSelectStringForTable(string schemaName, string tableName) {
+			return String.Format(SELECT_STRING_FORMAT, schemaName, tableName);
 		}
 
         /// <summary>
@@ -281,46 +281,21 @@ namespace PowerShellDBDrive {
 
 		public static PSObject FromDbDataReader(DbDataReader reader) {
 			PSObjectBuilder builder = new PSObjectBuilder();
+			builder.NewInstance();
 			for( int i = 0 ; i < reader.FieldCount ; i ++)  {
-				builder.AddField(reader.GetName(i), reader.GetValue(i), reader.GetFieldType(i));
+				builder.AddField(reader.GetName(i), reader.GetValue(i));
 			}
 			return builder.Build();
 		}
 		
-		public void NewInstance() {
+		public PSObjectBuilder NewInstance() {
 			currentInstance = new PSObject();
+			return this;
 		}
 		
-		public void AddField(string fieldName, Object fieldValue, Type type) {
-			System.TypeCode typeCode = Type.GetTypeCode(type);
-			switch(typeCode) {
-				case TypeCode.Boolean : 
-					AddField(fieldName, (bool) fieldValue);
-					break;
-				default : 
-					if (fieldValue != null) {
-						AddField(fieldName, fieldValue.ToString());
-					} else {
-						AddField(fieldName, null);
-					}
-					break;
-			}
-		}
-		
-		public void AddField(string fieldName, string fieldValue) {
+		public PSObjectBuilder AddField(string fieldName, object fieldValue) {
 			currentInstance.Members.Add(new PSNoteProperty(fieldName, fieldValue));
-		}
-		
-		public void AddField(string fieldName, bool fieldValue) {
-			currentInstance.Members.Add(new PSNoteProperty(fieldName, fieldValue));
-		}
-		
-		public void AddField(string fieldName, int fieldValue) {
-			currentInstance.Members.Add(new PSNoteProperty(fieldName, fieldValue));
-		}
-		
-		public void AddField(string fieldName, double fieldValue) {
-			currentInstance.Members.Add(new PSNoteProperty(fieldName, fieldValue));
+			return this;
 		}
 		
 		public PSObject Build() {
@@ -331,7 +306,7 @@ namespace PowerShellDBDrive {
 	/// <summary>
 	///	Simple Query Manager handling simple queries to a database.
 	/// <summary>
-	public class BaseQueryManager : IDisposable {
+	public class BaseQueryManager {
 
 		/// <summary>
 		/// Default mapping 
@@ -373,8 +348,6 @@ namespace PowerShellDBDrive {
 			{ typeof(DateTimeOffset?), DbType.DateTimeOffset }
 		});
 
-		private bool disposed = false;
-
 		private DbConnection CurrentConnection {get; set;}
 
 		protected IReadOnlyDictionary<Type, DbType> TypeMap { 
@@ -403,7 +376,6 @@ namespace PowerShellDBDrive {
 		}
 
 		public IEnumerable<T> QueryForObjects<T>(string query, IDictionary<string, object> namedParameters, Func<DbDataReader, T> callback, int timeout) {
-			CurrentConnection.Open();
             using (DbCommand command = CurrentConnection.CreateCommand())
             {
                 command.CommandText = query;
@@ -426,21 +398,28 @@ namespace PowerShellDBDrive {
             }
 		}
 
-		#region IDisposable implementation
-		public void Dispose() {
-			Dispose(true);
-			GC.SuppressFinalize(this);
+		public T QueryForSingleScalar<T>(string query,  IDictionary<string, object> namedParameters, int timeout) {
+			using (DbCommand command = CurrentConnection.CreateCommand())
+            {
+                command.CommandText = query;
+                command.CommandTimeout = timeout;
+                command.CommandType = CommandType.Text;
+                foreach (var entry in namedParameters) {
+					DbParameter parameter = command.CreateParameter();
+					parameter.DbType = TypeMap[entry.Value.GetType()];
+            		parameter.ParameterName = entry.Key;
+            		parameter.Value = entry.Value;
+            		command.Parameters.Add(parameter);
+                }
+                using (DbDataReader reader = command.ExecuteReader())
+                {
+                    if (reader.Read())
+                    {
+                        return (T) reader.GetValue(0);
+                    }
+                }
+            }
+            return default(T);
 		}
-
-		public void Dispose(bool disposing) {
-			if (disposed) {
-				return;
-			}
-			if (disposing) {
-				CurrentConnection.Dispose();
-			}
-			disposed = true;
-		}
-		#endregion IDisposable implementation
 	}
 }

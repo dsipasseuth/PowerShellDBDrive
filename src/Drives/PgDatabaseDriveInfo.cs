@@ -22,23 +22,33 @@ namespace PowerShellDBDrive.Drives
 
         private const string SELECT_SCHEMA = "SELECT catalog_name, schema_owner, schema_name FROM information_schema.schemata where schema_name = @schemaname";
 
+        private const string SELECT_SCHEMAS_NAMES = "SELECT schema_name FROM information_schema.schemata";
+
+        private const string SELECT_SCHEMAS_NAMES_REGEXP = "SELECT schema_name FROM information_schema.schemata where schema_name ~* @schemaname";
+
         private const string SELECT_SCHEMA_EXISTS = "SELECT 1 FROM information_schema.schemata WHERE schema_name = @schemaname";
 		
         private const string SELECT_TABLES =
-@"SELECT 
-	table_catalog,
-	table_schema,
-	table_name, 
-	table_type, 
-	self_referencing_column_name, 
-	reference_generation, 
-	user_defined_type_catalog, 
-	user_defined_type_schema, 
-	user_defined_type_name,
-	is_insertable_into,
-	is_typed,
-	commit_action
-FROM information_schema.tables where table_schema = @schemaname";
+    @"SELECT 
+    	table_catalog,
+    	table_schema,
+    	table_name, 
+    	table_type, 
+    	self_referencing_column_name, 
+    	reference_generation, 
+    	user_defined_type_catalog, 
+    	user_defined_type_schema, 
+    	user_defined_type_name,
+    	is_insertable_into,
+    	is_typed,
+    	commit_action
+    FROM information_schema.tables where table_schema = @schemaname";
+
+        private const string SELECT_TABLES_NAMES = "SELECT table_name FROM information_schema.tables where table_schema = @schemaname";
+
+        private const string SELECT_TABLES_NAMES_REGEXP = "SELECT table_name FROM information_schema.tables where table_schema = @schemaname and table_name ~* @regexp";
+
+        private const string SELECT_TABLE_EXISTS = "SELECT 1 FROM information_schema.tables WHERE table_schema = @schemaname AND table_name = @tablename";
 
         private const string SELECT_COLUMNS =
 @"SELECT 
@@ -57,10 +67,6 @@ FROM information_schema.tables where table_schema = @schemaname";
 	numeric_scale            ,
 	datetime_precision       ,
 	interval_type            ,
-	interval_precision       ,
-	character_set_catalog    ,
-	character_set_schema     ,
-	character_set_name       ,
 	collation_catalog        ,
 	collation_schema         ,
 	collation_name           ,
@@ -70,21 +76,8 @@ FROM information_schema.tables where table_schema = @schemaname";
 	udt_catalog              ,
 	udt_schema               ,
 	udt_name                 ,
-	scope_catalog            ,
-	scope_schema             ,
-	scope_name               ,
 	maximum_cardinality      ,
 	dtd_identifier           ,
-	is_self_referencing      ,
-	is_identity	yes_or_no    ,
-	identity_generation      ,
-	identity_start           ,
-	identity_increment       ,
-	identity_maximum         ,
-	identity_minimum         ,
-	identity_cycle           ,
-	is_generated             ,
-	generation_expression    ,
 	is_updatable             
 FROM information_schema.columns WHERE table_schema = @schemaname AND table_name = @tablename";
 
@@ -109,7 +102,7 @@ FROM information_schema.columns WHERE table_schema = @schemaname AND table_name 
                     {
                         while (reader.Read())
                         {
-                            yield return new PgDatabaseSchemaInfo(reader.GetString(reader.GetOrdinal("CATALOG_NAME")), reader.GetString(reader.GetOrdinal("SCHEMA_OWNER")), reader.GetString(reader.GetOrdinal("SCHEMA_NAME")));
+                            yield return new PgDatabaseSchemaInfo(reader["CATALOG_NAME"] as string, reader["SCHEMA_OWNER"] as string, reader["SCHEMA_NAME"] as string);
                         }
                     }
                 }
@@ -135,7 +128,7 @@ FROM information_schema.columns WHERE table_schema = @schemaname AND table_name 
                     {
                         if (reader.Read())
                         {
-                            return new PgDatabaseSchemaInfo(reader.GetString(reader.GetOrdinal("CATALOG_NAME")), reader.GetString(reader.GetOrdinal("SCHEMA_OWNER")), reader.GetString(reader.GetOrdinal("SCHEMA_NAME")));
+                            return new PgDatabaseSchemaInfo(reader["CATALOG_NAME"] as string, reader["SCHEMA_OWNER"] as string, reader["SCHEMA_NAME"] as string);
                         }
                     }
                 }
@@ -150,7 +143,7 @@ FROM information_schema.columns WHERE table_schema = @schemaname AND table_name 
                 connection.Open();
                 using (DbCommand command = connection.CreateCommand())
                 {
-                    command.CommandText = SELECT_SCHEMAS;
+                    command.CommandText = SELECT_SCHEMAS_NAMES;
                     command.CommandTimeout = Timeout;
                     command.CommandType = CommandType.Text;
                     using (DbDataReader reader = command.ExecuteReader())
@@ -166,7 +159,28 @@ FROM information_schema.columns WHERE table_schema = @schemaname AND table_name 
 		
         public override IEnumerable<String> GetSchemasNames(string regexp)
         {
-            throw new NotImplementedException();
+            using (DbConnection connection = GetConnection())
+            {
+                connection.Open();
+                using (DbCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = SELECT_SCHEMAS_NAMES_REGEXP;
+                    command.CommandTimeout = Timeout;
+                    command.CommandType = CommandType.Text;
+                    DbParameter parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "regexp";
+                    parameter.Value = regexp;
+                    command.Parameters.Add(parameter);
+                    using (DbDataReader reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            yield return reader["SCHEMA_NAME"] as string;
+                        }
+                    }
+                }
+            }
         }
 
         public override IEnumerable<ObjectType> GetSupportedObjectTypes(string schemaName)
@@ -257,11 +271,58 @@ FROM information_schema.columns WHERE table_schema = @schemaname AND table_name 
         }
 		
         public override IEnumerable<String> GetTablesNames(string schemaName) {
-			return null;
-		}
+            using (DbConnection connection = GetConnection())
+            {
+                connection.Open();
+                using (DbCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = SELECT_TABLES_NAMES;
+                    command.CommandTimeout = Timeout;
+                    command.CommandType = CommandType.Text;
+                    DbParameter parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "schemaname";
+                    parameter.Value = schemaName;
+                    command.Parameters.Add(parameter);
+                    using (DbDataReader reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            yield return reader["TABLE_NAME"] as string;
+                        }
+                    }
+                }
+            }
+        }
 		
 		public override IEnumerable<String> GetTablesNames(string schemaName, string tableName) {
-			return null;
+			using (DbConnection connection = GetConnection())
+            {
+                connection.Open();
+                using (DbCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = SELECT_TABLES_NAMES_REGEXP;
+                    command.CommandTimeout = Timeout;
+                    command.CommandType = CommandType.Text;
+                    DbParameter parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "schemaname";
+                    parameter.Value = schemaName;
+                    command.Parameters.Add(parameter);
+                    parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "regexp";
+                    parameter.Value = schemaName;
+                    command.Parameters.Add(parameter);
+                    using (DbDataReader reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            yield return reader["TABLE_NAME"] as string;
+                        }
+                    }
+                }
+            }
 		}
 
         public override IDatabaseTableInfo GetTable(string schemaName, string tableName)
@@ -275,31 +336,15 @@ FROM information_schema.columns WHERE table_schema = @schemaname AND table_name 
             using (DbConnection connection = GetConnection())
             {
                 connection.Open();
-                using (DbCommand command = connection.CreateCommand())
-                {
-                    command.CommandText = DatabaseUtils.GetSelectStringForTable(tableName);
-                    command.CommandTimeout = Timeout;
-                    using (DbDataReader reader = command.ExecuteReader())
-                    {
-                        PSObjectBuilder builder = new PSObjectBuilder();
-                        while (reader.Read())
-                        {
-                            if (maxResult > 0)
-                            {
-                                builder.NewInstance();
-                                for (int i = 0; i < reader.FieldCount; i++)
-                                {
-                                    builder.AddField(reader.GetName(i), reader.GetValue(i), reader.GetFieldType(i));
-                                }
-                                yield return builder.Build();
-                            }
-                            else
-                            {
-                                yield break;
-                            }
-                            maxResult--;
-                        }
+                BaseQueryManager bqm = new BaseQueryManager(connection);
+                string query = DatabaseUtils.GetSelectStringForTable(schemaName, tableName);
+                long count = 1;
+                foreach (PSObject p in bqm.QueryForObjects(query, new Dictionary<string, object>() {}, Timeout)) {
+                    yield return p;
+                    if (count >= maxResult) {
+                        yield break;
                     }
+                    count++;
                 }
             }
         }
@@ -333,7 +378,45 @@ FROM information_schema.columns WHERE table_schema = @schemaname AND table_name 
 
         public override bool IsObjectExist(string schemaName, ObjectType objectType, string[] objectPath)
         {
-            throw new NotImplementedException();
+            if (objectType == ObjectType.TABLE) {
+                return IsTableExist(schemaName, objectPath[0]);
+            }
+            return false;
+        }
+
+        private bool IsTableExist(string schemaName, string tableName)
+        {
+            using (DbConnection connection = GetConnection())
+            {
+                connection.Open();
+                using (DbCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = SELECT_TABLE_EXISTS;
+                    command.CommandTimeout = Timeout;
+                    command.CommandType = CommandType.Text;
+
+                    DbParameter parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "schemaname";
+                    parameter.Value = schemaName;
+                    command.Parameters.Add(parameter);
+
+                    parameter = command.CreateParameter();
+                    parameter.DbType = DbType.String;
+                    parameter.ParameterName = "tablename";
+                    parameter.Value = tableName;
+                    command.Parameters.Add(parameter);
+
+                    using (DbDataReader reader = command.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            return true;
+                        }
+                        return false;
+                    }
+                }
+            }
         }
         
         #region Utility Methods 
@@ -360,37 +443,33 @@ FROM information_schema.columns WHERE table_schema = @schemaname AND table_name 
         private PgDatabaseColumnInfo BuildDatabaseColumnInfo(DbDataReader reader)
         {
             PgDatabaseColumnInfo dci = new PgDatabaseColumnInfo();
-            /*dci.Owner = reader["OWNER"] as string;
-            dci.TableName = reader["TABLE_NAME"] as string;
-            dci.ColumnName = reader["COLUMN_NAME"] as string;
-            dci.DataType = reader["DATA_TYPE"] as string;
-            dci.DataTypeMod = reader["DATA_TYPE_MOD"] as string;
-            dci.DataTypeOwner = reader["DATA_TYPE_OWNER"] as string;
-            dci.DataLength = reader["DATA_LENGTH"] as long?;
-            dci.DataPrecision = reader["DATA_PRECISION"] as long?;
-            dci.DataScale = reader["DATA_SCALE"] as long?;
-            dci.Nullable = reader["NULLABLE"] as string;
-            dci.ColumnId = reader["COLUMN_ID"] as long?;
-            dci.DefaultLength = reader["DEFAULT_LENGTH"] as long?;
-            dci.DataDefault = reader["DATA_DEFAULT"] as long?;
-            dci.NumDistinct = reader["NUM_DISTINCT"] as long?;
-            dci.LowValue = reader["LOW_VALUE"] as string;
-            dci.HighValue = reader["HIGH_VALUE"] as string;
-            dci.Density = reader["DENSITY"] as long?;
-            dci.NumNulls = reader["NUM_NULLS"] as long?;
-            dci.NumBuckets = reader["NUM_BUCKETS"] as long?;
-            dci.LastAnalyzed = reader["LAST_ANALYZED"] as DateTime?;
-            dci.SampleSize = reader["SAMPLE_SIZE"] as long?;
-            dci.CharacterSetName = reader["CHARACTER_SET_NAME"] as string;
-            dci.CharColDeclLength = reader["CHAR_COL_DECL_LENGTH"] as long?;
-            dci.GlobalStats = reader["GLOBAL_STATS"] as string;
-            dci.UserStats = reader["USER_STATS"] as string;
-            dci.AvgColLen = reader["AVG_COL_LEN"] as long?;
-            dci.CharLength = reader["CHAR_LENGTH"] as long?;
-            dci.CharUsed = reader["CHAR_USED"] as string;
-            dci.V80FmtImage = reader["V80_FMT_IMAGE"] as string;
-            dci.DataUpgraded = reader["DATA_UPGRADED"] as string;
-            dci.Histogram = reader["HISTOGRAM"] as string;*/
+            dci.TableCatalog    = reader["table_catalog"] as string;
+            dci.TableSchema     = reader["table_schema"] as string;
+            dci.TableName       = reader["table_name"] as string;
+            dci.ColumnName      = reader["column_name"] as string;
+            dci.OrdinalPosition = reader["ordinal_position"] as int? ?? default(int);
+            dci.ColumnDefault   = reader["column_default"] as string;
+            dci.IsNullable      = reader["is_nullable"] as bool? ?? (default(bool));
+            dci.DataType        = reader["data_type"] as string;
+            dci.CharacterMaximumLength  = reader["character_maximum_length"] as int?;
+            dci.CharacterOctetLength    = reader["character_octet_length"] as int?;
+            dci.NumericPrecision    = reader["numeric_precision"] as int?;
+            dci.NumericPrecisionRadix   = reader["numeric_precision_radix"] as int?;
+            dci.NumericScale    =  reader["numeric_scale"] as int?;
+            dci.DatetimePrecision   =  reader["datetime_precision"] as int?;
+            dci.IntervalType    =  reader["interval_type"] as string;
+            dci.CollationCatalog    =  reader["collation_catalog"] as string;
+            dci.CollationSchema =  reader["collation_schema"] as string;
+            dci.CollationName   =  reader["collation_name"] as string;
+            dci.DomainCatalog   =  reader["domain_catalog"] as string;
+            dci.DomainSchema    =  reader["domain_schema"] as string;
+            dci.DomainName  =  reader["domain_name"] as string;
+            dci.UdtCatalog  =  reader["udt_catalog"] as string;
+            dci.UdtSchema   =  reader["udt_schema"] as string;
+            dci.UdtName = reader["udt_name"] as string;
+            dci.MaximumCardinality = reader["maximum_cardinality"] as int?;
+            dci.DtdIdentifier = reader["dtd_identifier"] as string;
+            dci.IsUpdatable = reader["is_updatable"] as bool? ?? default(bool);
             return dci;
         }
 

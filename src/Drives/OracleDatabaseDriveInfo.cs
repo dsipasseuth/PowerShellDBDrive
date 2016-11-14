@@ -516,7 +516,7 @@ FROM ALL_TAB_COLUMNS WHERE OWNER = :schemaname AND TABLE_NAME = :tablename";
                 connection.Open();
                 using (DbCommand command = connection.CreateCommand())
                 {
-                    command.CommandText = DatabaseUtils.GetSelectStringForTable(tableName);
+                    command.CommandText = DatabaseUtils.GetSelectStringForTable(schemaName, tableName);
                     command.CommandTimeout = Timeout;
                     using (DbDataReader reader = command.ExecuteReader())
                     {
@@ -528,7 +528,7 @@ FROM ALL_TAB_COLUMNS WHERE OWNER = :schemaname AND TABLE_NAME = :tablename";
                                 builder.NewInstance();
                                 for (int i = 0; i < reader.FieldCount; i++)
                                 {
-                                    builder.AddField(reader.GetName(i), reader.GetValue(i), reader.GetFieldType(i));
+                                    builder.AddField(reader.GetName(i), reader.GetValue(i));
                                 }
                                 yield return builder.Build();
                             }
@@ -585,7 +585,7 @@ FROM ALL_TAB_COLUMNS WHERE OWNER = :schemaname AND TABLE_NAME = :tablename";
                 connection.Open();
                 using (DbCommand command = connection.CreateCommand())
                 {
-                    command.CommandText = SELECT_SINGLE_TABLE;
+                    command.CommandText = SELECT_TABLE_EXISTS;
                     command.CommandTimeout = Timeout;
                     command.CommandType = CommandType.Text;
 

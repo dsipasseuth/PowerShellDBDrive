@@ -31,19 +31,18 @@ namespace PowerShellDBDrive.Cmdlets {
 		[Parameter]
 		public int Timeout {get; set;} = 60;
 
-		private DbConnection CurrentConnection {get; set;}
+		private DbProviderFactory Factory {get; set;}
 
 		protected override void BeginProcessing() {
 			base.BeginProcessing();
-			DbProviderFactory factory = DbProviderFactories.GetFactory(Provider);
-            DbConnectionStringBuilder csb = factory.CreateConnectionStringBuilder();
-            csb.ConnectionString = ConnectionString;
-			CurrentConnection = factory.CreateConnection();
-            CurrentConnection.ConnectionString = csb.ConnectionString;
+			Factory = DbProviderFactories.GetFactory(Provider);
 		}
 
 		protected override void ProcessRecord() {
-			using (BaseQueryManager bqm = new BaseQueryManager(CurrentConnection)) {
+			using (DbConnection Connection = Factory.CreateConnection()) {
+            	Connection.ConnectionString = ConnectionString;
+				Connection.Open();
+				BaseQueryManager bqm = new BaseQueryManager(Connection);
 				long count = 1;
 				IDictionary<string, object> namedParameters = Parameters.Cast<DictionaryEntry>().ToDictionary( kvp => (string) kvp.Key, kvp => (object) kvp.Value );
 				foreach (PSObject p in bqm.QueryForObjects(Query, namedParameters, Timeout)) {
@@ -53,12 +52,6 @@ namespace PowerShellDBDrive.Cmdlets {
 					}
 					count++;
 				}
-			}
-		}
-
-		protected override void EndProcessing() {
-			if (CurrentConnection != null) {
-				CurrentConnection.Dispose();	
 			}
 		}
 	}

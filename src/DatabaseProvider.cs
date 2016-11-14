@@ -10,13 +10,6 @@ namespace PowerShellDBDrive
     [CmdletProvider("DatabaseProvider", ProviderCapabilities.None)]
     public class DatabaseProvider : NavigationCmdletProvider
     {
-        /// <summary> 
-        /// Default size of array written out to PowerShell.
-        /// </summary> 
-        public const int DEFAULT_PS_OUTPUT_ARRAY_SIZE = 50;
-
-        public int PsOutputArraySize { get; set; }
-
         #region Drive Manipulation 
 
         /// <summary> 
@@ -47,7 +40,6 @@ namespace PowerShellDBDrive
                 return null;
             }
             var driveParams = this.DynamicParameters as DatabaseParameters;
-            PsOutputArraySize = DEFAULT_PS_OUTPUT_ARRAY_SIZE;
             DatabaseDriveInfo driveInfo = DatabaseDriveInfoFactory.NewInstance(drive, driveParams);
             WriteDebug(String.Format("Parsed Connection String : {0}", driveInfo.ParsedConnectionString));
             return driveInfo;
