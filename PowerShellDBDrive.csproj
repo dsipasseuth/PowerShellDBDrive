@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Provides database providers for PSDrive in PowerShell</Description>
+    <Copyright>Copyright 2016 by Daniel Sipasseuth</Copyright>
+    <AssemblyTitle>PowerShellDBDrive</AssemblyTitle>
+    <TargetFramework>netcoreapp2.0</TargetFramework>
+    <DebugType>portable</DebugType>
+    <AssemblyName>PowerShellDBDrive</AssemblyName>
+    <PackageId>PowerShellDBDrive</PackageId>
+    <NetStandardImplicitPackageVersion>2.0.0</NetStandardImplicitPackageVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Data.Common" Version="4.1-*" />
+    <PackageReference Include="Microsoft.PowerShell.5.ReferenceAssemblies" Version="1.1.0-*" />
+    <PackageReference Include="GodSharp.Data.Common.DbProvider" Version="1.0.0-preview1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+
+</Project>
