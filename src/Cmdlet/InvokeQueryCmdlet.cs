@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Management.Automation;
 using System.Linq;
 using PowerShellDBDrive;
+using GodSharp.Data.Common.DbProvider;
 
 namespace PowerShellDBDrive.Cmdlets {
 	/// <summary>

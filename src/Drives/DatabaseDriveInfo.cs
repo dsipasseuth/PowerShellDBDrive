@@ -3,6 +3,7 @@ using System.Management.Automation;
 using System.Data.Common;
 using System.Collections.Generic;
 using PowerShellDBDrive.DataModel;
+using GodSharp.Data.Common.DbProvider;
 
 namespace PowerShellDBDrive.Drives
 {
